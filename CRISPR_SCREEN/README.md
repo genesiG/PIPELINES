@@ -1,6 +1,6 @@
 # CRISPR_SCREEN
 
-The Rephill Lab's pipeline for pooled CRISPR screens (Nextflow): demultiplex
+The Richard Phillips Lab's pipeline for pooled CRISPR screens (Nextflow): demultiplex
 the sequencing run by inline barcode → read QC (FastQC/MultiQC) → find each
 guide in its read and count it (`mageck count`) → guide-representation QC with
 an HTML report per library → optional hit calling (`mageck test`) → a
