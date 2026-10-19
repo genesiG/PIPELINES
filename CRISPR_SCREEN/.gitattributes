@@ -1,0 +1,23 @@
+# Line endings. Everything that runs inside Linux (the cluster, or the Docker
+# container on Windows/Mac) must keep Unix (LF) line endings, also when the
+# repository is cloned on Windows (where git usually converts to CRLF):
+# a bash script with CRLF fails inside the container.
+* text=auto
+
+*.sh          text eol=lf
+*.command     text eol=lf
+*.nf          text eol=lf
+*.config      text eol=lf
+*.py          text eol=lf
+*.R           text eol=lf
+*.yaml        text eol=lf
+*.gitignore   text eol=lf
+Dockerfile    text eol=lf
+*.spec        text eol=lf
+*.explicit.txt text eol=lf
+*.conf        text eol=lf
+images.txt    text eol=lf
+
+# Windows launchers: CRLF (cmd.exe / PowerShell).
+*.bat         text eol=crlf
+*.ps1         text eol=crlf

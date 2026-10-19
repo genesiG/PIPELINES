@@ -1,0 +1,25 @@
+# Nextflow runtime
+work/
+.nextflow/
+.nextflow-bin/
+.nextflow.log*
+nf_work/
+nf_logs/
+
+# Per-project files/directories — only relevant if someone runs the
+# pipeline (or `init`) inside this repo itself by mistake; real projects
+# live elsewhere. Root-anchored so examples/config.yaml stays tracked.
+/config.yaml
+/original_data/
+/metadata/
+/intermediate_files/
+/results/
+
+# Container cache (large binary .sif files — shared at /project/rephilllab/nf_containers, not versioned)
+*.sif
+.singularity/
+.apptainer/
+
+# OS / editor
+.DS_Store
+*.swp

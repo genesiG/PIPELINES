@@ -1,0 +1,15 @@
+# .gitignore for a CRISPR_SCREEN project directory
+# Keeps the repo to config.yaml + your own input CSVs (samplesheet.csv,
+# library.csv, contrasts.csv) + examples/ — raw data, pipeline outputs, and
+# Nextflow's own runtime state are large, regenerable, and don't belong in
+# git history.
+
+original_data/
+results/
+# pipeline-generated run bookkeeping (logs, pipeline_info/) — regenerable
+metadata/
+
+nf_work/
+work/
+.nextflow/
+.nextflow.log*

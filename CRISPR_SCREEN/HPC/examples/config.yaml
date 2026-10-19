@@ -1,0 +1,106 @@
+# config.yaml
+# Edit the values below; do NOT edit examples/config.yaml itself for a real run.
+#
+# Directory convention (same across every lab pipeline):
+#   samplesheet.csv, library.csv, contrasts.csv  your own small input CSVs —
+#                                live at the project root (this file too), not nested
+#   raw FASTQ(s)                 not copied into the project: they stay where they are,
+#                                fastq_r1/fastq_r2 (or fastq_dir) point to them (see below)
+#   original_data/fastq/        per-sample FASTQs (demux output)
+#   metadata/                   pipeline-generated intermediate metadata (not this
+#                                pipeline's own inputs — kept for consistency with
+#                                pipelines that do populate it)
+#   results/<step>/             final outputs, one subfolder per pipeline step
+#     intermediate_files/       under results/: tool-format conversions (e.g. MAGeCK library file, anchor-trimmed FASTQs)
+
+# Prefix used for every output file (e.g. "AV_CELL_DEATH_SCREEN")
+project_name: my_screen
+
+# ---- Inputs -----------------------------------------------------------
+samplesheet: samplesheet.csv   # CSV: barcode_id,barcode,sample_name[,library]
+                               #   barcode_id/barcode: only needed when the pipeline demultiplexes (fastq_r1, no fastq_dir)
+                               #   library (optional): which library each sample was screened with — see below
+library: library.csv           # CSV: gene,gRNA_ID,sequence
+                               # several libraries/pools: use a "*" pattern, e.g. "libraries/*.csv"
+
+# Several libraries/pools? 
+#     Add a `library` column to samplesheet.csv naming each
+#     The values in the `library` column must be the library's file name without .csv
+#         (e.g. AM_Pool_1.csv -> AM_Pool_1)
+#     Each library will then be counted separately
+#         One count table, one set of QC tables/plots per library
+#         Every contrast is tested within the library holding all of its samples.
+#     Without a `library` column, every sample is counted against every library.
+
+# ---- Reads ------------------------------------------------------------------
+# The FASTQ(s) are read from where they are (absolute path, or relative to this
+# folder). They are never moved or copied, and this file is not rewritten for them.
+# (a) Multiplexed: one FASTQ with every sample's reads, demultiplexed by barcode.
+fastq_r1: /path/to/Undetermined_R1.fastq.gz
+fastq_r2: null  # set only if paired_end: true
+# (b) Already demultiplexed: path to the folder containing your fastq files
+#     If `fastq_dir` is set, demultiplexing is skipped and fastq_r1/fastq_r2 are ignored.
+fastq_dir: null
+paired_end: false  # true if the reads are paired (needs fastq_r2, or _R1/_R2 files in fastq_dir)
+
+# ---- Step 1 — demultiplexing (cutadapt; skipped when fastq_dir is set) ---
+# Splits the multiplexed reads into one FASTQ per sample by barcode (cutadapt).
+# demultiplex_args: "--minimum-length 1"   # extra cutadapt options (appended to the cutadapt command of demultiplex.sh): discard reads that are empty after the barcode is removed
+
+# ---- Step 1 QC — FastQC, MultiQC, barcode-position plot ------------------
+# FastQC and MultiQC reports on the per-sample FASTQs, and a plot of where each barcode matched in the read.
+# fastqc_args: "--nogroup"   # extra fastqc options (fastqc.sh passes them to fastqc): show every base position instead of grouping bases for reads > 50 bp
+# multiqc_args: "--title 'My screen QC'"   # extra multiqc options (multiqc.sh passes them to multiqc): title of the MultiQC report
+# plot_barcode_position_args: "--bw=1"   # extra arguments for plot_barcode_position.R (key=value form): kernel bandwidth of the density curve in bp (default 0.5)
+# (the barcode-position plot can also be replaced for this project: see 'Changing a step' below)
+
+# ---- Step 2 — guide positioning and counting (MAGeCK count) --------------
+# Finds each guide in the reads and counts it per sample with mageck count.
+# sgrna_len: how many bases of the guide mageck takes after its position in the read (20 for most libraries).
+sgrna_len: 20
+# mageck_count_args: "--keep-tmp"   # extra mageck count options (mageck_count.sh passes them to mageck count): keep mageck's intermediate files; the numbers do not change
+
+# Leave trim5 commented out / null: the pipeline finds each library's own
+# constant vector sequence automatically and positions every guide from it —
+# no need to know or configure it, works for any plasmid design. Set trim5
+# to a number only to bypass this and use a fixed 5' trim length instead.
+# trim5: 22
+
+# ---- Step 3 — statistical testing (MAGeCK test; optional) ----------------
+# Tests each contrast (treatment vs control) for enriched or depleted guides and genes with mageck test.
+contrasts: null # contrasts.csv # CSV: treatment,control
+# Leave commented out / null to stop after counting + QC
+#     e.g. for a library-representation / pilot-QC run 
+#     where treatment/control samples don't exist yet.
+# NOTE: Patterns are regex searches: "Pool_1" also matches "Pool_10";
+#       anchor with "^Pool_1$" to match one sample.
+# mageck_test_args: "--normcounts-to-file"   # extra mageck test options (mageck_test.sh passes them to mageck test): also write the normalised count table of the test; the statistics do not change
+
+# ---- Changing a step for THIS project only -------------------------------
+# Two ways, both for this project only (the pipeline itself is not changed):
+#   (a) Extra arguments: every script in /project/rephilllab/CRISPR_SCREEN/HPC/bin/ takes
+#       extra arguments from a key named after the script (file name without extension)
+#       plus "_args", e.g. mageck_count_args. The text is appended to the command line of
+#       the tool the script runs (the header of bin/<script> says which tool receives it; the
+#       Step sections above show examples). It changes results only as that tool's option does.
+#   (b) Script replacement: to change what a step does, put your own copy of its script in utils/
+#       and add a key named after the script (without extension) whose value is its path
+#       (relative paths are relative to the project folder). The replacement must read the same
+#       arguments and write the same files as the original (documented in the header of bin/<script>).
+#       The key must be named exactly like the script.
+#
+# `init` puts an unchanged copy of the pipeline's default script in utils/, so results are
+# identical to the default until you edit it. While you have not edited it, it is refreshed
+# automatically when the pipeline's default script changes. Edit it (or point this key at your
+# own script) to change the plot for this project only. Delete the line to use the pipeline's
+# built-in script.
+plot_barcode_position: utils/plot_barcode_position.R
+
+# ---- Output / directory convention ---------------------------------------
+original_data_dir: ./original_data
+intermediate_dir: ./results/intermediate_files
+outdir: ./results
+# false = delete work/ and .nextflow/ after a successful run to free disk space; the next run then recomputes
+# every step instead of resuming. true = keep it (resume only re-runs what changed, e.g. after
+# adding contrasts). Failed or stopped runs always keep it, so a re-run resumes.
+keep_work: false
