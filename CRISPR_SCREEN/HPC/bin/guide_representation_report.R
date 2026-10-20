@@ -330,7 +330,9 @@ sections <- list(
     to a library guide (what mageck count itself counts &mdash; the same number as Mapping Rate
     above), a <strong>near-miss</strong> (exactly one base different from some guide &mdash; not
     counted by mageck, but recovered here), or a <strong>far-miss</strong> (not within one base of
-    any guide in the library).)",
+    any guide in the library). Each percentage is of that sample's own total reads. The three can add
+    up to a little less than 100%: reads that mageck counted in the sample's total but listed neither
+    as matched nor as unmapped (for example, reads too short to hold a whole guide) are not shown.)",
     interpretation = r"(A large exact-match share with very little near- or far-miss is the ideal
     case. A substantial near-miss share indicates real signal being lost to sequencing or PCR
     error: those reads almost certainly came from a real guide, just with one wrong base call. A

@@ -14,6 +14,7 @@ Project rules (all agents)
 - Never start, stop, clean or resume a run, and never run docker, nextflow, mageck, cutadapt, Rscript or pipeline scripts.
 - Be OS-neutral: write Windows paths with \ (PowerShell or Git Bash) and Mac/Linux paths with /.
 - Only implementer may change: utils/ scripts, samplesheet.csv, library files, contrasts.csv, and config.yaml when the spec says so.
+- Never assume the biology or how the experiment was done or processed (screen type, what each sample is, replicates, timepoints, controls, expected hits, library preparation). Use only the context in your brief or in the project's CONTEXT.md, and never infer it from sample or file names. If something you need is missing, list it under "Questions for the user" at the end of your return instead of guessing. If the data seem to contradict the stated context, report the numbers and the file; don't reinterpret the design.
 
 Workflow
 1. Read the spec and the relevant files (briefly). Note the acceptance checks and the invariants: the project AGENTS.md "Customizing" rules, the header arguments of the pipeline script being replaced, and the names the pipeline expects.

@@ -20,6 +20,12 @@
 > `.claude/agents/` in this folder is the same kit as `agent/.claude/agents/`
 > (which `init` copies into every project); who does what is in `CLAUDE.md`.
 
+> **Helping someone analyse a screen?** Never assume the biology or how the
+> experiment was done or processed: ask the user, record the answers in the
+> project's `CONTEXT.md`, and flag data that contradict them. The questions and
+> rules are in `agent/AGENTS.md`, section "Ask about the experiment; never
+> assume it" (copied into every project by `init`).
+
 This is the **shared, lab-wide** Nextflow pipeline for pooled CRISPR screens on
 UPenn PMACS (LSF). The repository is cloned once to
 `/project/rephilllab/CRISPR_SCREEN`; every lab member's projects run the code

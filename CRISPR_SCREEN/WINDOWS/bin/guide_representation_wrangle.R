@@ -281,9 +281,9 @@ if (is.null(lib_seqs) || is.null(unmapped_path) || !file.exists(unmapped_path) |
     classification_df <- classification_df |>
       left_join(mapping_df |> rename(sample = label) |> select(sample, reads, mappedreads), by = "sample") |>
       mutate(
-        pct_exact_match = round(mappedreads      / max(reads, 1) * 100, 2),
-        pct_near_miss   = round(near_miss_reads   / max(reads, 1) * 100, 2),
-        pct_far_miss    = round(far_miss_reads    / max(reads, 1) * 100, 2)
+        pct_exact_match = round(mappedreads      / pmax(reads, 1) * 100, 2),
+        pct_near_miss   = round(near_miss_reads   / pmax(reads, 1) * 100, 2),
+        pct_far_miss    = round(far_miss_reads    / pmax(reads, 1) * 100, 2)
       ) |>
       select(sample, reads, mappedreads, pct_exact_match, near_miss_reads, pct_near_miss,
              far_miss_reads, pct_far_miss)

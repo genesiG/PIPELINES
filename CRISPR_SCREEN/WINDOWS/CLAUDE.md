@@ -11,6 +11,17 @@ may be changed.
 - **Changing the pipeline**: only when the user explicitly asks for it for the whole
   lab; see `AGENTS.md`, section B.
 
+## Ask about the experiment; never assume it
+
+Never assume the biology or how the experiment was done or processed (screen
+type, what each sample is, replicates, timepoints, controls, expected hits, how
+the sequencing library was made). Ask the user, in short batches, before
+preparing inputs, choosing contrasts, interpreting results or writing Methods;
+record the answers in the project's `CONTEXT.md`. When the data seem to
+contradict what the user said, show them the numbers and ask; never
+reinterpret the design yourself. Details: "Ask about the experiment; never
+assume it" in `AGENTS.md` of the project folder (copied by `init`).
+
 ## Delegate to subagents (default, not the exception)
 
 The agent definitions are in `.claude/agents/` of this folder. The lead (you) uses the
@@ -46,7 +57,8 @@ The delegation rules for project folders are in `agent\CLAUDE.md`, which is copi
 ## How to brief
 
 - Each brief stands alone: absolute paths, the project folder (or this pipeline folder,
-  which is read-only for analysis work), the files the agent owns, the expected return.
+  which is read-only for analysis work), the files the agent owns, the expected return, and the experimental context the
+  user confirmed (or the path to `CONTEXT.md`).
 - Spot-check numbers from Haiku agents by opening the cited path. Run independent agents in one message.
 - If an agent fails twice, escalate (another model or agent) or ask the user.
 
