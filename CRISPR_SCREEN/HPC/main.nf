@@ -538,6 +538,7 @@ workflow {
     // single joined channel, sorted by library name, so entry i of each list
     // is the same library and the task hash is stable between runs.
     breakdown_tables = Channel.empty()
+    breakdown_wide   = Channel.value([])
     if (cfg.libraryGroups.size() > 1) {
         breakdown_in = count_out.results
             .map { lib_name, count_table, _norm, _log, _unmapped -> tuple(lib_name, count_table) }
@@ -547,6 +548,8 @@ workflow {
             .map { rows -> tuple(rows.collect { it[0] }, rows.collect { it[1] }, rows.collect { it[2] }, rows.collect { it[3] }) }
         breakdown = LIBRARY_BREAKDOWN(breakdown_in, cfg.sampleNames.join(','), sc.library_breakdown)
         breakdown_tables = breakdown.table.mix(breakdown.wide)
+        // value channel: it feeds every per-library GUIDE_REPRESENTATION_REPORT task (see below)
+        breakdown_wide   = cfg.allVsAll ? breakdown.wide.first() : Channel.value([])
     }
 
     // ---- Step 2 QC: guide representation, per library --------------------------
@@ -577,7 +580,11 @@ workflow {
     }
     // join(): tuple(prefix, tables) + tuple(prefix, plots) -> tuple(prefix, tables, plots)
     report_in = guide_tables_by_pool.join(guide_plots_by_pool, failOnMismatch: true, failOnDuplicate: true)
-    qc_reports = GUIDE_REPRESENTATION_REPORT(report_in, sc.guide_representation_report)
+    // All-vs-all: every sample is counted against every library, so a per-library
+    // mapping % only says how much of the sample belongs to THAT library. The
+    // per-library report gets the cross-library breakdown to tell "Low mapping"
+    // from "belongs to another library". Assigned/single modes pass nothing.
+    qc_reports = GUIDE_REPRESENTATION_REPORT(report_in, breakdown_wide, sc.guide_representation_report)
     finished = finished.mix(qc_reports.report)
 
     // With more than one library, also build one report comparing every

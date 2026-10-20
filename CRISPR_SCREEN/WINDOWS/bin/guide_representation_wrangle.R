@@ -26,7 +26,9 @@
 #' OUTPUTS (<prefix> = count-table name without .count.txt):
 #'   <prefix>_counts_long.csv            sgRNA, Gene, sample, count, is_control
 #'                                       (feeds ECDF, density, control-vs-targeting)
-#'   <prefix>_ranked.csv                 sgRNA, Gene, avg_count, rank
+#'   <prefix>_ranked.csv                 sgRNA, Gene, avg_cpm, rank
+#'                                       (avg_cpm = mean reads per million per sample, so
+#'                                       samples of unequal depth are comparable)
 #'   <prefix>_lorenz.csv                 sample, count, cum_gRNAs, cum_reads
 #'   <prefix>_gini.csv                   sample, Gini
 #'   <prefix>_percentile_ratio.csv       sample, p10, p90, ratio_90_10
@@ -73,8 +75,10 @@ save_table  <- function(df, name) {
 }
 
 # ---- Helpers --------------------------------------------------------------
+# Gini over ALL guides of the library, zero-count guides included (only NA is
+# dropped), so dropout raises the Gini instead of being ignored.
 calc_gini <- function(x) {
-  x <- sort(x[x > 0])
+  x <- sort(x[!is.na(x)])
   n <- length(x)
   if (n == 0 || sum(x) == 0) return(NA_real_)
   sum((2 * seq_len(n) - n - 1) * x) / (n * sum(x))
@@ -135,11 +139,16 @@ df_long <- df |>
 save_table(df_long, "counts_long")
 
 # ---- Ranked guide representation ------------------------------------------
+# avg_cpm is the mean per-million-reads count across active samples: each
+# sample's counts are divided by that sample's own total reads (over all
+# guides) and scaled to per-million, so samples of unequal depth are comparable.
+count_mat_rank <- as.matrix(df[, active_samples, drop = FALSE])
+cpm_mat        <- sweep(count_mat_rank, 2, colSums(count_mat_rank, na.rm = TRUE) / 1e6, "/")
 df_ranked <- df |>
-  mutate(avg_count = rowMeans(across(all_of(active_samples)), na.rm = TRUE)) |>
-  arrange(avg_count) |>
+  mutate(avg_cpm = rowMeans(cpm_mat, na.rm = TRUE)) |>
+  arrange(avg_cpm) |>
   mutate(rank = row_number()) |>
-  select(sgRNA, Gene, avg_count, rank)
+  select(sgRNA, Gene, avg_cpm, rank)
 save_table(df_ranked, "ranked")
 
 # ---- Lorenz curves + Gini -------------------------------------------------
@@ -160,16 +169,17 @@ gini_df <- df_long |>
 save_table(gini_df, "gini")
 
 # ---- 90/10 percentile ratio -----------------------------------------------
+# Percentiles over ALL guides, zero-count guides included. A sample with >10%
+# zero-count guides has p10 = 0, so the ratio becomes p90 / 1 (denominator
+# floored at 1 read). With >=90% zero-count guides p90 is 0 too: the ratio is
+# then undefined (NA, not 0, which would read as "perfectly even") and the
+# sample is flagged as skewed below.
 pct_ratio_df <- df_long |>
   group_by(sample) |>
   summarize(
-    p10         = quantile(count[count > 0], 0.10, na.rm = TRUE),
-    p90         = quantile(count[count > 0], 0.90, na.rm = TRUE),
-    ratio_90_10 = round(
-      quantile(count[count > 0], 0.90, na.rm = TRUE) /
-        max(quantile(count[count > 0], 0.10, na.rm = TRUE), 1),
-      2
-    ),
+    p10         = quantile(count, 0.10, na.rm = TRUE),
+    p90         = quantile(count, 0.90, na.rm = TRUE),
+    ratio_90_10 = if (p90 > 0) round(p90 / max(p10, 1), 2) else NA_real_,
     .groups = "drop"
   )
 save_table(pct_ratio_df, "percentile_ratio")
@@ -354,7 +364,7 @@ if (!is.null(classification_df)) {
 }
 summary_df <- summary_df |>
   mutate(
-    library_skew_flag = ratio_90_10 >= 10,
+    library_skew_flag = is.na(ratio_90_10) | ratio_90_10 >= 10,
     undetected_flag   = pct_undetected >= 5
   )
 save_table(summary_df, "qc_summary")

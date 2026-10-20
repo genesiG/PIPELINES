@@ -7,6 +7,11 @@
  *
  * Downstream of both WRANGLE and PLOT (not a third parallel branch): it only
  * reads their outputs, so it never recomputes a table or re-renders a plot.
+ *
+ * In all-vs-all runs (every sample counted against every library) it also
+ * waits for the library breakdown (LIBRARY_BREAKDOWN) and passes its wide
+ * table to every per-library report, so a low mapping % can be told apart
+ * from reads that belong to another library. Otherwise no breakdown is passed.
  */
 include { runner; extraArgs } from './functions'
 
@@ -27,6 +32,7 @@ process GUIDE_REPRESENTATION_REPORT {
 
     input:
     tuple val(prefix), path(tables), path(plots)   // tables/*.csv (WRANGLE) + plots/*.svg (PLOT), staged flat
+    path breakdown_wide   // wide library-breakdown table in all-vs-all runs, or an empty list [] otherwise
     path report_script   // bin/guide_representation_report.R, or the project's `guide_representation_report:` replacement
 
     output:
@@ -34,13 +40,16 @@ process GUIDE_REPRESENTATION_REPORT {
     path "command.sh", emit: command_sh
 
     script:
+    // [] stages nothing, so the optional --breakdown argument is only added when a file was staged
+    def bd = [breakdown_wide].flatten().findAll { it }
+    def breakdown_arg = bd ? "--breakdown=\"${bd[0]}\"" : ''
     """
     ${runner(report_script)} "${report_script}" \\
         --tables-dir=. \\
         --plots-dir=. \\
         --prefix="${prefix}" \\
         --project="${params.project_name}" \\
-        --outdir=. \\
+        --outdir=. ${breakdown_arg} \\
         ${extraArgs('guide_representation_report')}
     """
 

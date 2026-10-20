@@ -116,6 +116,12 @@ read it counts is, by construction, an exact match to a guide. Mapping Rate
 in the QC report already **is** the percent of exact matches; it's just
 labeled that way explicitly now.
 
+In an all-vs-all run (more than one library CSV and no `library` column in
+samplesheet.csv), each library's `mapping_pct` counts only that library's
+reads, so a low value for a library is expected for samples that belong to
+another library. `<project_name>_library_breakdown_wide.csv` shows, per
+sample, the % of reads matching each library and any library.
+
 The pipeline goes one step further and classifies the reads mageck
 *couldn't* map (`mageck count --unmapped-to-file`'s output) into:
 - **near-miss** — exactly one base different from some guide in the
@@ -160,7 +166,7 @@ results/
 │   └── qc/
 │       ├── fastqc/
 │       ├── multiqc/
-│       ├── cutadapt_stats/      JSON + CSV demux metrics (Gini, CV, per-sample counts)
+│       ├── cutadapt_stats/      JSON + CSV demux metrics (Gini, CV, min/max fold over all barcodes incl. zero-read ones, per-sample counts)
 │       └── demux_plots/         barcode-position density plot (ggplot2 SVG) + raw CSV —
 │                                 where in the read the barcode was matched, per sample;
 │                                 a shared, sharp peak confirms a consistent read structure
@@ -183,6 +189,7 @@ results/
 │       │                         depth, replicate correlations, dropout, qc_summary);
 │       │                         with >1 library also <project_name>_library_breakdown.csv
 │       │                         / _wide.csv: % of each sample's reads per library
+│       │                         (the _wide file adds pct_any_library and main_library)
 │       ├── plots/               guide representation / Lorenz / ECDF / ... SVGs, drawn
 │       │                         only from tables/
 │       └── report/              <prefix>_qc_report.html — one self-contained page per

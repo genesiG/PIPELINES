@@ -86,12 +86,12 @@ bar_width <- max(6, n_samples * 1.2 + 1.5)
 # ---- 1. Ranked guide representation ---------------------------------------
 ranked <- read_table("ranked")
 if (!is.null(ranked)) {
-  p <- ggplot(ranked, aes(x = rank, y = log10(avg_count + 1))) +
+  p <- ggplot(ranked, aes(x = rank, y = log10(avg_cpm + 1))) +
     geom_area(fill = "purple4", alpha = 0.3) +
     geom_line(color = "purple4", linewidth = 1) +
     labs(
       x = "gRNA Rank (lowest to highest representation)",
-      y = "Average Read Count + 1 (log10)",
+      y = "Mean CPM + 1 (log10)",
       title = paste("Guide Representation —\n", prefix)
     ) +
     my_theme +

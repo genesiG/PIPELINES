@@ -290,8 +290,11 @@ Status `succeeded` → point the user to:
 - `METHODS.md` — Materials and Methods of this run, ready to adapt for a paper.
 
 Summarize from `results\counts\qc\tables\*_qc_summary.csv` (`mapping_pct`,
-`library_skew_flag`, `undetected_flag`). Low mapping (well under ~50%) for a
-sample usually means it belongs to another library, or a read-structure issue:
+`library_skew_flag`, `undetected_flag`). In an all-vs-all run (more than one library CSV, no
+`library` column), a low `mapping_pct` for one library is expected for samples of other
+libraries; in `*_library_breakdown_wide.csv` Low mapping means `pct_any_library` < 30, and a
+"Mainly <library>" badge is neutral. Otherwise Low mapping means `mapping_pct` < 30, usually a
+sample from another library, or a read-structure issue:
 the read-classification plot tells which (mostly near-miss → read structure /
 quality; mostly far-miss → wrong library).
 

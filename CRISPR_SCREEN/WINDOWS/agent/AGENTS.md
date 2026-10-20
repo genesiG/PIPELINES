@@ -179,7 +179,9 @@ folder moved: re-run `& "<new pipeline folder>\run_crisprscreen.bat" init "<this
   `results\counts\qc\tables\<project_name>_library_breakdown.csv` / `_wide.csv`
   (also section 0 of the pools comparison report) show what % of each
   sample's reads matched each library, any library, or none — the place to
-  check which pool(s) a sample really holds. Contrasts can't be tested in
+  check which pool(s) a sample really holds. Each library's `mapping_pct`
+  counts only that library's reads, so a low value for a library the sample
+  is not in is expected. Contrasts can't be tested in
   this mode (each sample is in every table); add a `library` column first.
 - If the user says their samples were screened with different
   libraries/pools, or the QC shows some samples mapping far better than
@@ -363,8 +365,11 @@ don't edit it in place: copy it before adapting it. Text marked
 
 When summarizing results, start from `results\counts\qc\report\<prefix>_qc_report.html`
 (or `*_qc_summary.csv` directly — `library_skew_flag`, `undetected_flag`,
-`mapping_pct`) and the MultiQC report. Low mapping (well under ~50%) for a
-sample usually means it belongs to a different library, or `trim5`/`sgrna_len`
+`mapping_pct`) and the MultiQC report. In an all-vs-all run (more than one library CSV, no
+`library` column), a low `mapping_pct` for one library is expected for samples of other
+libraries; in `_library_breakdown_wide.csv` Low mapping means `pct_any_library` < 30 and a
+"Mainly <library>" badge is neutral. Otherwise Low mapping means `mapping_pct` < 30, usually a
+sample from a different library, or `trim5`/`sgrna_len`
 don't match its read structure. The Read Classification plot tells you which:
 mostly **near-miss** (1 base off a real guide) points to `trim5`/`sgrna_len` or
 sequencing quality; mostly **far-miss** (not close to any guide) points to a

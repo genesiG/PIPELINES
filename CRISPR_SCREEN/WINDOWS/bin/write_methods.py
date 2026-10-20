@@ -1111,10 +1111,10 @@ class Methods:
         items = [
             "**Mapping rate**: the percentage of the sample's reads (as given to MAGeCK) that were counted, i.e. "
             "matched a library sgRNA exactly.",
-            f"**Gini index** of sgRNA read counts ({self.cite('li2015')}), computed over sgRNAs with at least one "
-            "read; 0 indicates perfectly even representation.",
-            "**90/10 ratio**: the 90th divided by the 10th percentile of read counts among sgRNAs with at least "
-            "one read (the 10th percentile floored at 1); flagged when ≥ 10.",
+            f"**Gini index** of sgRNA read counts ({self.cite('li2015')}), computed over all sgRNAs of the library "
+            "including those with zero reads (so dropout increases it); 0 indicates perfectly even representation.",
+            "**90/10 ratio**: the 90th divided by the 10th percentile of read counts across all library sgRNAs, "
+            "including zero-count ones (the 10th percentile floored at 1); flagged when ≥ 10.",
             "**Undetected sgRNAs**: the percentage of library sgRNAs with no reads; flagged when ≥ 5%.",
             "**Representation within 2 log2 units**: the percentage of sgRNAs whose log2(count + 1) lies within "
             "2 of the log2 of the sample's mean count.",

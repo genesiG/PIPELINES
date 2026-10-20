@@ -18,7 +18,15 @@ import re
 
 
 def calc_uniformity_metrics(counts: list[int]) -> dict:
-    valid_counts = sorted([c for c in counts if c > 0])
+    """Uniformity of per-sample read counts across demultiplexed samples.
+
+    Zero-read samples (barcodes that got no reads) are included on purpose:
+    an empty barcode is a demultiplexing failure and should lower uniformity.
+    min_max_fold is None when the smallest sample has 0 reads (the fold is
+    undefined; JSON null rather than inf, which json.dump would write as the
+    non-standard token Infinity).
+    """
+    valid_counts = sorted([c for c in counts if c is not None and c >= 0])
     n = len(valid_counts)
     if n == 0 or sum(valid_counts) == 0:
         return {"gini": 0.0, "cv": 0.0, "min_max_fold": 0.0, "mean": 0.0, "median": 0.0}
@@ -33,12 +41,12 @@ def calc_uniformity_metrics(counts: list[int]) -> dict:
     min_val = valid_counts[0]
     max_val = valid_counts[-1]
     median = valid_counts[n // 2] if n % 2 != 0 else (valid_counts[n // 2 - 1] + valid_counts[n // 2]) / 2.0
-    min_max_fold = (max_val / min_val) if min_val > 0 else float("inf")
+    min_max_fold = (max_val / min_val) if min_val > 0 else None
 
     return {
         "gini": round(gini, 4),
         "cv": round(cv, 4),
-        "min_max_fold": round(min_max_fold, 2),
+        "min_max_fold": round(min_max_fold, 2) if min_max_fold is not None else None,
         "mean": round(mean, 1),
         "median": round(median, 1),
         "min": min_val,
@@ -183,7 +191,8 @@ def main() -> None:
         f"Total Processed: {total_processed:,} | Demultiplexed: {reads_with_adapters:,} ({pct_demux}%) "
         f"| Discarded: {reads_discarded:,} ({pct_discarded}%)"
     )
-    print(f"Uniformity Gini: {uniformity['gini']} | CV: {uniformity['cv']} | Min/Max fold: {uniformity['min_max_fold']}x")
+    min_max_txt = "NA" if uniformity["min_max_fold"] is None else f"{uniformity['min_max_fold']}x"
+    print(f"Uniformity Gini: {uniformity['gini']} | CV: {uniformity['cv']} | Min/Max fold: {min_max_txt}")
 
 
 if __name__ == "__main__":

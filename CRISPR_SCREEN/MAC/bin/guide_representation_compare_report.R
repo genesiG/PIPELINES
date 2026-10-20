@@ -153,8 +153,14 @@ breakdown_path <- file.path(tables_dir, paste0(project, "_library_breakdown.csv"
 breakdown_all  <- if (file.exists(breakdown_path)) read.csv(breakdown_path, check.names = FALSE) else NULL
 if (!is.null(breakdown_all) && nrow(breakdown_all) == 0) breakdown_all <- NULL
 
+# All-vs-all mode (no samplesheet `library` column): every sample is counted
+# against every library, so samples have several real library rows. Detected
+# from the data: the breakdown file exists and at least one sample has more
+# than one real library row (assigned mode: exactly one per sample).
+breakdown_real <- if (!is.null(breakdown_all)) breakdown_all[!(breakdown_all$library %in% c("Any library", "No library guide")), ] else NULL
+all_vs_all <- !is.null(breakdown_real) && any(table(breakdown_real$sample) > 1)
+
 has_mapping <- "mapping_pct" %in% names(qc_all)
-low_mapping <- if (has_mapping) qc_all$mapping_pct < 30 else rep(FALSE, nrow(qc_all))
 
 # One x-axis label per (pool, sample): just the pool name when it has a
 # single sample (the common case), "pool: sample" when it has several.
@@ -168,12 +174,41 @@ qc_all <- qc_all |>
   arrange(pool, sample) |>
   mutate(x_label = factor(x_label, levels = unique(x_label)))
 
+# Low mapping and the "Mainly <pool>" note, one value per qc_all row. Computed
+# after the sort above so each value lines up with its row.
+low_mapping <- if (has_mapping) qc_all$mapping_pct < 30 else rep(FALSE, nrow(qc_all))
+mainly_pool <- rep(NA_character_, nrow(qc_all))
+if (all_vs_all) {
+  # The sample's "Any library" % of reads: below 30 means it matches no pool
+  # well. Falls back to the mapping_pct rule for a sample missing from the breakdown.
+  any_rows    <- breakdown_all[breakdown_all$library == "Any library", ]
+  any_pct     <- setNames(suppressWarnings(as.numeric(any_rows$pct_of_sample_reads)), any_rows$sample)
+  any_row_pct <- any_pct[qc_all$sample]
+  low_mapping <- ifelse(is.na(any_row_pct), low_mapping, any_row_pct < 30)
+  # The sample's main library: the real library with the most mapped reads
+  # (same rule as the breakdown table below), named like qc_all$pool.
+  main_pool_of <- function(smp) {
+    pl <- breakdown_real[breakdown_real$sample == smp, ]
+    mr <- suppressWarnings(as.numeric(pl$mapped_reads))
+    if (nrow(pl) == 0 || all(is.na(mr)) || max(mr, na.rm = TRUE) <= 0) return(NA_character_)
+    pool_of(paste0(project, "_", pl$library[which.max(mr)]))
+  }
+  mainly_pool <- vapply(qc_all$sample, main_pool_of, character(1))
+}
+
+# Plain-language notes shown only in all-vs-all mode.
+aa_note_glance    <- "All-vs-all mode: each Mapping % is the share of that sample's reads that match THIS pool, so low values for samples of other pools are expected. Low mapping is only flagged when a sample matches no pool well (Any library below 30%); a sample whose reads mostly match another pool is marked &ldquo;Mainly &lt;pool&gt;&rdquo;."
+aa_note_map       <- "All-vs-all mode: a pool's mapping rate bar is the share of each sample's reads that match THAT pool, so low bars for samples that belong to other pools are expected. The Low mapping flag is only raised when a sample matches no pool well (Any library below 30%); a sample whose reads mostly match another pool is labelled &ldquo;Mainly &lt;pool&gt;&rdquo; instead."
+aa_note_breakdown <- "All-vs-all mode: each sample is counted against every pool, so in the per-pool panels below a sample's low mapping or dropout in a pool it does not belong to is expected. Its main library here shows the pool it belongs to. Low mapping is only flagged when a sample matches no pool well (Any library below 30%)."
+
 # ---- "At a glance" table: every pool, every sample, one row each ----------
 flags_col <- vapply(seq_len(nrow(qc_all)), function(i) {
   b <- character(0)
   if (isTRUE(qc_all$library_skew_flag[i]))    b <- c(b, badge("Library skew", "flag"))
   if (isTRUE(qc_all$undetected_flag[i]))      b <- c(b, badge("High dropout", "flag"))
   if (has_mapping && isTRUE(low_mapping[i]))  b <- c(b, badge("Low mapping",  "flag"))
+  if (all_vs_all && !isTRUE(low_mapping[i]) && !is.na(mainly_pool[i]) && mainly_pool[i] != qc_all$pool[i])
+    b <- c(b, badge(paste0("Mainly ", mainly_pool[i]), "info"))
   if (length(b) == 0) b <- badge("OK", "ok")
   paste(b, collapse = " ")
 }, character(1))
@@ -204,11 +239,11 @@ many_samples <- length(unique(counts_all$sample)) > 12
 legend_guard <- if (many_samples) guides(color = "none", fill = "none") else NULL
 
 svg_guide_rep <- {
-  p <- ggplot(ranked_all, aes(x = rank, y = log10(avg_count + 1))) +
+  p <- ggplot(ranked_all, aes(x = rank, y = log10(avg_cpm + 1))) +
     geom_area(fill = "purple4", alpha = 0.3) +
     geom_line(color = "purple4", linewidth = 0.7) +
     facet_wrap(~pool, ncol = facet_ncol, scales = "free_x") +
-    labs(x = "gRNA Rank (lowest to highest)", y = "Read Count + 1 (log10)",
+    labs(x = "gRNA Rank (lowest to highest)", y = "Mean CPM + 1 (log10)",
          title = paste("Guide Representation by Pool —", project)) +
     my_theme + centered
   plot_to_svg(p, "cmp-guide-rep", facet_w, facet_h)
@@ -402,11 +437,12 @@ sections_html <- paste(c(
   if (!is.null(breakdown_html)) {
     section("breakdown", "0. Reads per Library", paste0("For every sample: the share of its reads that match a guide of each library it was counted against, and the share matching no library at all. A read matching a guide shared by several libraries counts once in &ldquo;Any library&rdquo;. With no <code>library</code> column in <code>samplesheet.csv</code>, every sample is counted against every library, so this shows which pool(s) each sample really holds. Numbers: <code>results/counts/qc/tables/", project, "_library_breakdown.csv</code> (one row per sample &times; library) and <code>_library_breakdown_wide.csv</code> (one row per sample)."),
       breakdown_html,
-      r"(A sample screened with one pool shows one dominant colour (its main library, in bold in the
+      paste0(r"(A sample screened with one pool shows one dominant colour (its main library, in bold in the
       table) and little else. Several sizeable colours mean the sample holds a mix of pools. A sample
       that is almost entirely grey matches no library: it is empty, failed, or from a different screen.
       In the per-pool sections below, every sample appears in every pool's panel; a sample that holds
       few reads of a pool will look like heavy dropout there. Read those panels together with this one.)",
+      if (all_vs_all) paste0(" ", aa_note_breakdown) else ""),
       r"(<li><b>No library</b>: check the sample's FastQC report (short or poly-G reads usually mean an
       empty or failed library) and whether it belongs to this screen at all.</li>
       <li><b>Mixed</b>: expected if the sample was meant to hold several pools; otherwise check for a
@@ -421,14 +457,15 @@ sections_html <- paste(c(
            "<div class='plot'>", svg_undet, "</div>",
            if (!is.null(svg_map)) paste0("<div class='plot'>", svg_map, "</div>") else "",
            "</div>"),
-    "A pool above the flagged line on any of these has that specific problem — see that metric's own section below for what it means and what to check.",
+    paste0("A pool above the flagged line on any of these has that specific problem — see that metric's own section below for what it means and what to check.",
+           if (all_vs_all) paste0(" ", aa_note_map) else ""),
     r"(<li>A pool flagged on several metrics at once usually indicates a labeling or sample mix-up
     in <code>samplesheet.csv</code>, rather than several unrelated problems.</li>
     <li>% Undetected near 100% for a pool is a different, more severe problem than ordinary
     dropout: it usually means that sample wasn't actually screened with this library, rather than
     its guides genuinely failing one by one.</li>)"),
 
-  section("guide_representation", "2. Guide Representation (Ranked)", "Each panel shows one pool's guides, sorted from lowest to highest read count.",
+  section("guide_representation", "2. Guide Representation (Ranked)", "Each panel shows one pool's guides, sorted from lowest to highest mean CPM. Each guide's value is its mean counts per million reads (CPM) across the pool's samples, which puts samples of different depth on one scale.",
     plot_div(svg_guide_rep),
     r"(A steep drop at the low-rank end of a panel indicates a subset of that pool's guides are
     barely present or missing. A steep rise concentrated at the high-rank end indicates a small
@@ -565,6 +602,7 @@ table.qc-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .badge { display: inline-block; border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
 .badge-ok { background: var(--ok-bg); color: var(--ok-fg); }
 .badge-flag { background: var(--flag-bg); color: var(--flag-fg); margin-right: 0.2rem; }
+.badge-info { background: #e8eef6; color: #2b4a6f; margin-right: 0.2rem; }
 .table-scroll { overflow-x: auto; }
 td.main-lib { font-weight: 700; }
 .hint { color: var(--muted); font-size: 0.8em; }
@@ -586,7 +624,9 @@ html <- paste0(
   "correlation is the one thing left out here, since it can't be compared meaningfully across ",
   "pools that used different guides — see a pool's own report for that.</div>",
   "<nav class='toc'><h2>Sections</h2><ul>", toc_items, "</ul></nav>",
-  "<section id='summary'><h2>At a Glance</h2>", summary_table, "</section>",
+  "<section id='summary'><h2>At a Glance</h2>", summary_table,
+  if (all_vs_all) paste0("<p class='desc'>", aa_note_glance, "</p>") else "",
+  "</section>",
   sections_html,
   "<footer>Generated by the CRISPR_SCREEN pipeline's guide_representation_compare_report.R from tables in ",
   html_escape(tables_dir), ".</footer>",

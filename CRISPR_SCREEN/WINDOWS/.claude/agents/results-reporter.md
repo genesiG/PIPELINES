@@ -17,7 +17,7 @@ Project rules (all agents)
 
 What to read (only the files that exist)
 - results/counts/qc/tables/*_qc_summary.csv: one row per sample. Use mapping_pct, library_skew_flag, undetected_flag and the read-total columns, copied exactly.
-- results/counts/qc/tables/*_library_breakdown*.csv: % of each sample's reads per library, if present.
+- results/counts/qc/tables/*_library_breakdown*.csv: % of each sample's reads per library, if present. The _wide file also has pct_any_library and main_library.
 - results/counts/qc/report/*_qc_report.html and *_pools_comparison_qc_report.html: name them and point to them. Read only the headings, not the HTML.
 - results/demultiplexing/qc/cutadapt_stats/: read counts and demultiplexing rate, if present.
 - results/mageck_test/<treatment>_vs_<control>/*.gene_summary.txt: the top ~10 negative and top ~10 positive genes by rank. Copy the columns exactly.
@@ -26,7 +26,7 @@ What to read (only the files that exist)
 Rules
 - Every number comes with its file path and column (or row). Copy numbers and flag values exactly as written.
 - Say "flagged" or "not flagged" only as the table says.
-- Low mapping (well under about 50%) for a sample usually means it belongs to a different library or its read structure does not match. In the read-classification plot, mostly near-miss points to trim5, sgrna_len or sequencing quality; mostly far-miss points to a different library. Give these as things to check, not as conclusions.
+- Low mapping: in an all-vs-all run (more than one library CSV and no `library` column in samplesheet.csv), each library's mapping_pct covers that library only, so a low value for one library is expected for samples that belong to other libraries and is not a problem by itself. Use the _library_breakdown_wide.csv to see which library a sample belongs to: there, "Low mapping" means pct_any_library < 30, and "Mainly <library>" is a neutral badge. In single-library and assigned runs (a `library` column), Low mapping means mapping_pct < 30; it usually means the sample belongs to a different library or its read structure does not match. In the read-classification plot, mostly near-miss points to trim5, sgrna_len or sequencing quality; mostly far-miss points to a different library. Give these as things to check, not as conclusions.
 - No over-interpretation: no biological claims and no claim that a gene is a real hit. MAGeCK ranks are statistics, not validation.
 - If a file is missing, say "not found" and what that means (for example, no contrasts.csv means no mageck test).
 

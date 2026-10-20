@@ -200,6 +200,11 @@ want to check, which pool(s) each sample holds. In that mode:
   matching any library (a guide shared by several libraries counted once),
   and matching none, plus its main library. The pools comparison report
   opens with the same breakdown as a stacked bar chart and table.
+- each library's `mapping_pct` in `*_qc_summary.csv` counts only that library's
+  reads, so a low value for a pool the sample does not hold is expected. Here,
+  "Low mapping" means `pct_any_library` < 30, and a sample mainly matching
+  another library gets a neutral "Mainly <library>" badge. With a `library`
+  column (or one library), Low mapping means `mapping_pct` < 30.
 - every sample appears in every pool's QC panels; a sample that holds few
   reads of a pool looks like heavy dropout there, so read those panels
   together with the breakdown.

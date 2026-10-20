@@ -10,13 +10,16 @@
 #'
 #' USAGE:
 #'   Rscript guide_representation_report.R --tables-dir=<dir> --plots-dir=<dir> \
-#'       --prefix=<prefix> [--project=<name>] [--outdir=<dir>]
+#'       --prefix=<prefix> [--project=<name>] [--outdir=<dir>] [--breakdown=<file>]
 #'
 #'   --tables-dir  directory holding <prefix>_*.csv from the wrangle step
 #'   --plots-dir   directory holding <prefix>_*.svg from the plot step
 #'   --prefix      count-table prefix (e.g. MYSCREEN_library)
 #'   --project     project_name, shown in the report header (optional)
 #'   --outdir      where to write the report (default: current directory)
+#'   --breakdown   <project>_library_breakdown_wide.csv from bin/library_breakdown.py
+#'                 (optional; used in all-vs-all runs to show the reads mapped to
+#'                 each library. Without it the report is unchanged)
 #'
 #' OUTPUT: <prefix>_qc_report.html (a single file — every plot is embedded
 #' inline as SVG, so it can be emailed or opened from any machine with no
@@ -35,7 +38,7 @@ parse_args <- function(args) {
 }
 opt <- parse_args(commandArgs(trailingOnly = TRUE))
 if (is.null(opt[["tables-dir"]]) || is.null(opt[["plots-dir"]]) || is.null(opt$prefix)) {
-  stop("Usage: guide_representation_report.R --tables-dir=<dir> --plots-dir=<dir> --prefix=<prefix> [--project=<name>] [--outdir=<dir>]")
+  stop("Usage: guide_representation_report.R --tables-dir=<dir> --plots-dir=<dir> --prefix=<prefix> [--project=<name>] [--outdir=<dir>] [--breakdown=<file>]")
 }
 tables_dir <- opt[["tables-dir"]]
 plots_dir  <- opt[["plots-dir"]]
@@ -120,12 +123,53 @@ has_mapping  <- "mapping_pct" %in% names(qc)
 low_mapping  <- if (has_mapping) qc$mapping_pct < 30 else rep(FALSE, nrow(qc))
 has_class    <- "pct_near_miss" %in% names(qc)
 
+# ---- Optional library breakdown (bin/library_breakdown.py, wide file) ------
+# Used in all-vs-all runs (several libraries, no samplesheet library column),
+# where every sample was counted against every library. Without a usable file
+# none of the breakdown logic below applies.
+bd_wide <- NULL
+if (!is.null(opt[["breakdown"]]) && file.exists(opt[["breakdown"]]) &&
+    file.size(opt[["breakdown"]]) > 0) {
+  bd_wide <- tryCatch(read.csv(opt[["breakdown"]], check.names = FALSE),
+                      error = function(e) NULL)
+}
+bd_pct_cols <- character(0)
+if (!is.null(bd_wide) && "sample" %in% names(bd_wide)) {
+  bd_pct_cols <- setdiff(grep("^pct_", names(bd_wide), value = TRUE),
+                         c("pct_any_library", "pct_no_library_guide"))
+}
+has_breakdown <- length(bd_pct_cols) > 0
+# This report's library name: the prefix without its leading "<project>_".
+project_stub <- paste0(project, "_")
+lib_name <- if (startsWith(prefix, project_stub)) substring(prefix, nchar(project_stub) + 1) else prefix
+this_col <- paste0("pct_", lib_name)
+# Row of the breakdown for each sample of this report (NA if absent).
+bd_idx <- if (has_breakdown) match(qc$sample, bd_wide$sample) else rep(NA_integer_, nrow(qc))
+bd_in  <- !is.na(bd_idx)
+bd_pick <- function(col, numeric = TRUE) {
+  x <- if (has_breakdown && col %in% names(bd_wide)) bd_wide[[col]][bd_idx] else rep(NA, nrow(qc))
+  if (numeric) suppressWarnings(as.numeric(x)) else as.character(x)
+}
+bd_any_pct <- bd_pick("pct_any_library")
+bd_main    <- bd_pick("main_library", numeric = FALSE)
+
 # ---- "At a glance" summary table (every headline metric, one row/sample) ---
 flags_col <- vapply(seq_len(nrow(qc)), function(i) {
   b <- character(0)
   if (isTRUE(qc$library_skew_flag[i]))          b <- c(b, badge("Library skew",  "flag"))
   if (isTRUE(qc$undetected_flag[i]))            b <- c(b, badge("High dropout",  "flag"))
-  if (has_mapping && isTRUE(low_mapping[i]))    b <- c(b, badge("Low mapping",   "flag"))
+  if (bd_in[i]) {
+    # All-vs-all run: "Low mapping" means the sample matches no library well.
+    if (isTRUE(bd_any_pct[i] < 30)) b <- c(b, badge("Low mapping", "flag"))
+    # A sample mainly matching another library gets a neutral note only,
+    # and only when it is not already flagged Low mapping.
+    if (!isTRUE(bd_any_pct[i] < 30) && !is.na(bd_main[i]) && nzchar(bd_main[i]) &&
+        bd_main[i] != "none" && bd_main[i] != lib_name) {
+      b <- c(b, badge(paste0("Mainly ", bd_main[i]), "info"))
+    }
+  } else if (has_mapping && isTRUE(low_mapping[i])) {
+    b <- c(b, badge("Low mapping",   "flag"))
+  }
   if (length(b) == 0) b <- badge("OK", "ok")
   paste(b, collapse = " ")
 }, character(1))
@@ -155,6 +199,39 @@ summary_table <- paste0(
   "</tbody></table>"
 )
 
+# ---- "Reads mapped to each library" table (only with a breakdown) ----------
+# Shown under the Mapping Rate plot. One row per sample of this report.
+mapping_table_html <- ""
+if (has_breakdown && any(bd_in)) {
+  lib_heads  <- sub("^pct_", "", bd_pct_cols)
+  pct_vals   <- lapply(bd_pct_cols, bd_pick)
+  bd_reads   <- bd_pick("reads")
+  bd_none    <- bd_pick("pct_no_library_guide")
+  head_cells <- paste0("<th", ifelse(bd_pct_cols == this_col, " class='this-lib'", ""),
+                       ">", html_escape(lib_heads), "</th>", collapse = "")
+  rows_bd <- vapply(which(bd_in), function(i) {
+    cells <- vapply(seq_along(bd_pct_cols), function(k) {
+      cls <- c("num",
+               if (bd_pct_cols[k] == this_col) "this-lib",
+               if (!is.na(bd_main[i]) && bd_main[i] == lib_heads[k]) "main-lib")
+      paste0("<td class='", paste(cls, collapse = " "), "'>", fmt_pct(pct_vals[[k]][i], 1), "</td>")
+    }, character(1))
+    main_txt <- if (is.na(bd_main[i]) || !nzchar(bd_main[i])) "&mdash;" else html_escape(bd_main[i])
+    paste0("<tr><td>", html_escape(qc$sample[i]), "</td><td class='num'>", fmt_int(bd_reads[i]), "</td>",
+           paste(cells, collapse = ""),
+           "<td class='num'>", fmt_pct(bd_any_pct[i], 1), "</td>",
+           "<td class='num'>", fmt_pct(bd_none[i], 1), "</td>",
+           "<td>", main_txt, "</td></tr>")
+  }, character(1))
+  mapping_table_html <- paste0(
+    "<h3>Reads mapped to each library</h3>",
+    "<div class='table-scroll'><table class='qc-table'><thead><tr><th>Sample</th><th>Total Reads</th>",
+    head_cells,
+    "<th>Any library</th><th>No library guide</th><th>Main library</th></tr></thead><tbody>",
+    paste(rows_bd, collapse = "\n"), "</tbody></table></div>"
+  )
+}
+
 # ---- Plot sections: description / interpretation / troubleshooting --------
 # Plain, short sentences — this report is read by wet-lab scientists, not
 # statisticians. Each entry: id (report anchor), svgs (one or more
@@ -164,18 +241,38 @@ summary_table <- paste0(
 # in plain English instead of the plot when it wasn't generated.
 # `avg_word`/`ecdf_*`/`density_*` below adapt wording for a single-sample
 # library, where "average across samples" and "compare curves" don't apply.
-avg_word <- if (one_sample) "read count" else "average read count across this library's samples"
+avg_word <- if (one_sample) "counts per million reads (CPM)" else "average counts per million reads (CPM) across this library's samples"
 density_desc <- if (one_sample) {
   "The shape of this sample's read-count distribution: where most guides sit, and whether there's a separate cluster elsewhere in the range."
 } else {
   "The shape of each sample's read-count distribution, overlaid: where most guides sit, and whether there's a separate cluster elsewhere in the range."
 }
+# Mapping Rate wording: the breakdown paragraphs are added only when present.
+mapping_desc_base <- r"(The percent of sequenced reads that matched a library guide, from the mageck
+    count log. mageck count's own matching is always exact &mdash; it has no mismatch-tolerance
+    option &mdash; so this is also, exactly, the percentage of reads that exactly matched a guide.
+    The Read Classification plot below breaks the rest (the non-matching reads) down further.)"
+mapping_desc <- if (has_breakdown) {
+  paste0(mapping_desc_base, r"( In this run every sample was counted against every library in the
+    pool, so the Mapping Rate shown here is the share of each sample's reads that match THIS library.
+    A low value just means the sample belongs to another library. The table below shows, for each
+    sample, the percent of its reads that matched each library. "Low mapping" is flagged only when a
+    sample matches no library well (Any library under 30%).)")
+} else mapping_desc_base
+mapping_interp_base <- r"(A healthy pooled screen typically maps 60&ndash;70% or more of its reads;
+    this report flags anything under 30%. Mapping rate is independent of the representation metrics
+    above: a sample can map poorly yet still show even representation among the reads that did map
+    — that just means most of its sequencing depth was wasted, not misrepresented.)"
+mapping_interp <- if (has_breakdown) {
+  paste0(mapping_interp_base, r"( Red bars in the plot above (under 30%) are expected for samples of
+    other libraries; read the plot together with the table below.)")
+} else mapping_interp_base
 
 sections <- list(
   list(
     id = "guide_representation", svgs = "guide_representation",
     title = "1. Guide Representation (Ranked)",
-    description = paste0("Every guide's ", avg_word, ", sorted from lowest to highest, on a log scale. This is the standard check for how evenly a library is represented."),
+    description = paste0("Every guide's ", avg_word, ", sorted from lowest to highest, on a log scale (log10 of CPM + 1). CPM scales each sample to its own total reads, so samples of different sequencing depth sit on the same scale. This is the standard check for how evenly a library is represented."),
     interpretation = r"(The curve's slope reflects representation evenness. A shallow, gradual rise
     across the whole curve is the ideal case: most guides sit within a similar count range. A steep
     drop at the low-rank end indicates a subset of guides are barely present or missing entirely. A
@@ -216,7 +313,8 @@ sections <- list(
     representation: every guide contributing an identical share of reads. The further the curve
     bows away from the diagonal, the less evenly the library is represented. This is the same
     thing the Gini coefficient in the table above measures as one number &mdash; Gini is defined as
-    twice the area between the curve and the diagonal.)",
+    twice the area between the curve and the diagonal, computed over all of this library's guides,
+    including guides with zero reads.)",
     troubleshooting = r"(<li>A curve already bowed at T0/plasmid indicates a library or coverage
     problem — see Guide Representation above.</li>
     <li>Bowing that increases from T0 through treated/selected timepoints reflects selection
@@ -271,8 +369,10 @@ sections <- list(
   list(
     id = "90_10_ratio", svgs = "90_10_ratio",
     title = "6. 90/10 Percentile Ratio (Library Skew)",
-    description = r"(The ratio of the top 10% of guides' read counts to the bottom 10%, for
-    guides with at least one read.)",
+    description = r"(The ratio of the top 10% of guides' read counts to the bottom 10%, across all
+    of this library's guides, including guides with zero reads. A sample with more than 10% zero-count
+    guides has a bottom-10% value of zero, which is counted as 1 read, so its ratio is the 90th
+    percentile divided by 1: dropout raises the ratio.)",
     interpretation = r"(A ratio near 1 indicates very even representation. This report flags a
     ratio of 10 or higher as meaningfully skewed, and treats 5 or below as good — rules of thumb,
     not hard cutoffs.)",
@@ -304,14 +404,8 @@ sections <- list(
   list(
     id = "mapping_rate", svgs = "mapping_rate",
     title = "8. Mapping Rate (% Exact Guide Match)",
-    description = r"(The percent of sequenced reads that matched a library guide, from the mageck
-    count log. mageck count's own matching is always exact &mdash; it has no mismatch-tolerance
-    option &mdash; so this is also, exactly, the percentage of reads that exactly matched a guide.
-    The Read Classification plot below breaks the rest (the non-matching reads) down further.)",
-    interpretation = r"(A healthy pooled screen typically maps 60&ndash;70% or more of its reads;
-    this report flags anything under 30%. Mapping rate is independent of the representation metrics
-    above: a sample can map poorly yet still show even representation among the reads that did map
-    — that just means most of its sequencing depth was wasted, not misrepresented.)",
+    description = mapping_desc,
+    interpretation = mapping_interp,
     troubleshooting = r"(<li>A low rate in one sample among otherwise-good ones indicates a
     sample-specific issue: check its barcode/index assignment, or whether <code>trim5</code>
     matches its actual read structure.</li>
@@ -321,7 +415,8 @@ sections <- list(
     <li>A nonzero-but-low rate that isn't a config problem usually indicates the sample was
     screened with a different library than the one it's assigned to — the Read Classification plot
     below (a high far-miss share) is a good way to confirm that.</li>)",
-    missing_reason = "no usable mapping numbers could be read from the mageck count log for this library."
+    missing_reason = "no usable mapping numbers could be read from the mageck count log for this library.",
+    extra_html = mapping_table_html
   ),
   list(
     id = "read_classification", svgs = "read_classification",
@@ -404,6 +499,8 @@ render_section <- function(sec) {
   } else {
     "<div class='missing-box'><strong>Not generated for this library.</strong></div>"
   }
+  # Optional extra block (e.g. the per-library table) placed after the plot.
+  extra <- if (is.null(sec$extra_html)) "" else sec$extra_html
   troubleshooting_html <- if (grepl("<li>", sec$troubleshooting, fixed = TRUE)) {
     paste0("<ul>", sec$troubleshooting, "</ul>")
   } else {
@@ -414,6 +511,7 @@ render_section <- function(sec) {
     "<h2>", sec$title, "</h2>",
     "<p class='desc'>", sec$description, "</p>",
     body,
+    extra,
     "<div class='callout callout-interp'><h3>How to interpret it</h3><p>", sec$interpretation, "</p></div>",
     "<div class='callout callout-trouble'><h3>If this looks poor</h3>", troubleshooting_html, "</div>",
     "</section>"
@@ -468,6 +566,10 @@ table.qc-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .badge { display: inline-block; border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
 .badge-ok { background: var(--ok-bg); color: var(--ok-fg); }
 .badge-flag { background: var(--flag-bg); color: var(--flag-fg); margin-right: 0.2rem; }
+.badge-info { background: #e8eef6; color: #2b4a6f; margin-right: 0.2rem; }
+.table-scroll { overflow-x: auto; }
+td.main-lib { font-weight: 700; }
+table.qc-table td.this-lib, table.qc-table th.this-lib { background: #eef3f8; }
 footer { color: var(--muted); font-size: 0.82rem; margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1rem; }
 @media print { nav.toc { display: none; } h2 { break-before: page; } }
 )"
