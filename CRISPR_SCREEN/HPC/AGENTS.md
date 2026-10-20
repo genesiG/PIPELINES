@@ -1,4 +1,4 @@
-# AGENTS.md — CRISPR_SCREEN pipeline, cluster (HPC) version (Rephill Lab)
+# AGENTS.md — CRISPR_SCREEN pipeline, cluster (HPC) version (Richard Phillips Lab)
 
 > **Running an analysis on a personal computer (Windows / Mac)?** Use the
 > Docker versions: the `WINDOWS/` or `MAC/` folder of the full repository,

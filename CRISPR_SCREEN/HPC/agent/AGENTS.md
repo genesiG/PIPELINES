@@ -1,4 +1,4 @@
-# AGENTS.md — CRISPR screen project (Rephill Lab)
+# AGENTS.md — CRISPR screen project (Richard Phillips Lab)
 
 This directory is **one lab member's CRISPR screen project**, run with the lab's
 shared Nextflow pipeline at `/project/rephilllab/CRISPR_SCREEN/HPC`. You are here to

@@ -1,10 +1,9 @@
 # SETUP.md — one-time setup of a labmate's Mac for the lab's Docker pipelines
 
 Written for an AI agent (e.g. Claude Code) preparing a labmate's **Mac** to run
-the lab's containerized pipelines (CRISPR_SCREEN today; RNA-seq, CUT&RUN later).
+the lab's containerized pipelines (CRISPR_SCREEN today, RNA-seq, CUT&RUN etc.)
 Do this **once per computer**. Afterwards each pipeline only needs its own
-`bash run_crisprscreen.sh setup` (run from the pipeline's folder; it builds that
-pipeline's Docker image) and then runs from its runbook (`AGENTS.md` in this
+`bash run_<pipeline_name>.sh setup` (run from the pipeline's folder; it builds that pipeline's Docker image) and then runs from its runbook (`AGENTS.md` in this
 folder). Nothing here is specific to one pipeline.
 
 The user is usually a wet-lab scientist: explain each step in plain language,

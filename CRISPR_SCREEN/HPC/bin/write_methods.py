@@ -1246,8 +1246,8 @@ class Methods:
         version = (f"version {pipe.get('version')}" if pipe.get("version") else "") + \
             (f", git commit {commit}" if commit else "") + (" with uncommitted changes" if pipe.get("modified") else "")
         cluster = " on an LSF compute cluster" if "pmacs" in (nf.get("profile") or "") else ""
-        text = (f"The analysis was run with the {pipe.get('name') or 'CRISPR_SCREEN'} Nextflow pipeline (Rephill "
-                f"Lab; {version}) under Nextflow v{nf.get('version', '?')} ({self.cite('ditommaso2017')}){cluster}. ")
+        text = (f"The analysis was run with the {pipe.get('name') or 'CRISPR_SCREEN'} Nextflow pipeline (Richard "
+                f"Phillips Lab; {version}) under Nextflow v{nf.get('version', '?')} ({self.cite('ditommaso2017')}){cluster}. ")
         if engine:
             text += (f"Every step ran in a fixed container image ({tno}) with "
                      f"{'Apptainer' if engine == 'apptainer' else engine.capitalize()}"

@@ -1,4 +1,4 @@
-# AGENTS.md — CRISPR_SCREEN pipeline, Docker version for **Windows** (Rephill Lab)
+# AGENTS.md — CRISPR_SCREEN pipeline, Docker version for **Windows** (Richard Phillips Lab)
 
 This folder is the lab's pooled-CRISPR-screen pipeline (Nextflow: demultiplex →
 FastQC/MultiQC → `mageck count` → guide-representation QC → optional `mageck test`),

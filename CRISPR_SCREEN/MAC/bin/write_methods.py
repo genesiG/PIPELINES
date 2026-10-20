@@ -1257,8 +1257,8 @@ class Methods:
         cluster = " on an LSF compute cluster" if "pmacs" in (nf.get("profile") or "") else ""
         if engine == "docker" and nf.get("host"):
             cluster = f" on a personal computer ({nf.get('host')})"
-        text = (f"The analysis was run with the {pipe.get('name') or 'CRISPR_SCREEN'} Nextflow pipeline (Rephill "
-                f"Lab; {version}) under Nextflow v{nf.get('version', '?')} ({self.cite('ditommaso2017')}){cluster}. ")
+        text = (f"The analysis was run with the {pipe.get('name') or 'CRISPR_SCREEN'} Nextflow pipeline (Richard "
+                f"Phillips Lab; {version}) under Nextflow v{nf.get('version', '?')} ({self.cite('ditommaso2017')}){cluster}. ")
         if engine == "docker":
             # Docker version: Nextflow and every step run inside one image
             # (docker/Dockerfile): rocker/tidyverse + the tools from Bioconda.

@@ -1,4 +1,4 @@
-# AGENTS.md — CRISPR screen project (Rephill Lab), Docker version for Windows
+# AGENTS.md — CRISPR screen project (Richard Phillips Lab), Docker version for Windows
 
 This folder is **one lab member's CRISPR screen project**, run with the lab's
 shared pipeline (Docker version for Windows) installed on this computer at:
