@@ -12,13 +12,17 @@ help this user run the pipeline on *their* data, check results, and customize
    **lab-wide** pipeline. Every lab member runs those files. To change how this
    project's analysis or plots work, use a per-project override (see
    "Customizing"), never an edit to the shared copy.
-2. **Only launch the pipeline with `run_crisprscreen.sh`.** Don't call
-   `nextflow`, `mageck`, `cutadapt`, `Rscript` or `python` analysis scripts
-   yourself, and don't `bsub` your own jobs. `run_crisprscreen.sh` handles LSF
-   submission, containers, logging and `-resume`.
+2. **Only run the pipeline's own steps with `run_crisprscreen.sh`** (plain,
+   no subcommand). Don't call `nextflow`, `mageck`, `cutadapt` or
+   `apptainer` yourself, and don't `bsub` your own jobs. The launcher handles
+   LSF submission, containers, logging and `-resume`. Analyses *beyond* the
+   pipeline are allowed, but only as a project script run with
+   `run_crisprscreen.sh script` (an LSF job, never on the login node); see
+   "Analyses beyond the pipeline (extra steps)".
 3. **Don't run anything compute- or memory-heavy in the terminal.** The login
    node caps memory at ~2 GB. Reading logs, CSVs and small files is fine;
-   loading a FASTQ or running an analysis script is not.
+   loading a FASTQ or running an analysis script is not (use the `script`
+   subcommand for scripts).
 4. **Never move, delete, modify or overwrite the raw FASTQs.** They stay where
    the user keeps them: `fastq_r1`/`fastq_r2` (or the `fastq_dir` folder) in
    `config.yaml` point to them, as absolute or project-relative paths. The
@@ -92,7 +96,7 @@ conversation or it is in `CONTEXT.md`. Ask even when it seems obvious.
 ```
 config.yaml                    the run's settings — the file you usually edit
 samplesheet.csv                sample_name (+ barcode_id,barcode if the pipeline demultiplexes; + optional library)
-utils/                         this project's replacements for pipeline scripts (see "Customizing")
+utils/                         this project's replacements for pipeline scripts (see "Customizing") and its own analysis scripts (see "Analyses beyond the pipeline")
 library.csv                    gene,gRNA_ID,sequence (the sgRNA library; several files if several pools)
 contrasts.csv                  treatment,control (optional; enables mageck test)
 CONTEXT.md                     the experiment as the user described it (written by the agent; see above)
@@ -104,6 +108,7 @@ results/                       all outputs (see "Results")
 metadata/nf_logs/              LSF logs of each run's head job (read these first)
 metadata/.nextflow.log         Nextflow's detailed log (older runs: .nextflow.log.1, .2, ...)
 metadata/pipeline_info/        execution_trace.txt / execution_report.html per run; run_info.json + software_versions.tsv (behind METHODS.md)
+metadata/script_logs/          one log per `run_crisprscreen.sh script` run (+ .lsf.out/.lsf.err)
 .nextflow/                     Nextflow's resume cache — leave alone
 examples/                      starter CSVs and the config.yaml template
 ```
@@ -128,12 +133,20 @@ step whose inputs, script and settings haven't changed is reused from cache.
 Only what changed, and anything downstream of it, re-runs. There is no "run
 just step X" command: change the thing, re-run, and caching does the rest.
 
-The work directory (and Nextflow's `.nextflow/` cache) is deleted after a successful
-run unless `config.yaml` has `keep_work: true` (default `false`); failed or stopped runs
+The work directory (`/project/rephilllab/nf_work/$USER/<project>/`, not in the
+project folder, which may be on `/home` with a small quota) and Nextflow's
+`.nextflow/` cache are deleted after a successful
+run unless `config.yaml` has `keep_work: true` (default `false` on the cluster); failed or stopped runs
 always keep both. So
 re-running a finished project recomputes everything (~10-20 min for a full
 lane). To reuse the finished steps (e.g. after adding contrasts), `keep_work:
-true` must be set before the run.
+true` must be set before the run. `publish_mode` is `copy` (`auto` is also
+accepted and means copy on the cluster), so `results/` holds real copies and
+the cleanup never breaks it.
+
+To run one of the project's own scripts (an analysis beyond the pipeline) as an
+LSF job: `run_crisprscreen.sh script utils/<name>.R` (see "Analyses beyond the
+pipeline (extra steps)").
 
 If `run_crisprscreen.sh` isn't found, the user's `PATH` is missing
 `/project/rephilllab/bin`. Tell them, and point them at the "One-time setup"
@@ -248,7 +261,7 @@ copy's path. The shared script stays untouched for everyone else.
 cp /project/rephilllab/CRISPR_SCREEN/HPC/bin/guide_representation_plot.R utils/   # 1. copy
 # 2. edit utils/guide_representation_plot.R
 # 3. add to config.yaml:   guide_representation_plot: utils/guide_representation_plot.R
-run_crisprscreen.sh                                                           # 4. only that step (+ downstream) re-runs
+run_crisprscreen.sh                                                           # 4. that step (+ downstream) re-runs; see the work-folder note below
 ```
 
 | Script (= `config.yaml` key)                   | What it controls                                                                                                                                  |
@@ -272,22 +285,102 @@ run_crisprscreen.sh                                                           # 
   `<script name>_args: "..."` (e.g. `plot_barcode_position_args: "--bw=1"`,
   `guide_representation_plot_args: "--dpi=150"`,
   `mageck_count_args: "--count-n"`). The `.sh` scripts pass extra
-  arguments on to their tool.
+  arguments on to their tool. Changing a `<script>_args` value re-runs that
+  step (and everything downstream of it).
 - **Plot-only changes** (colors, labels, sizes, adding or dropping a plot):
-  replace the **plot** script and/or `my_theme.R`. Plot steps only read
-  precomputed tables, so no counting or statistics are redone.
+  replace the **plot** script(s) and/or `my_theme.R`. Every plot is written
+  as SVG and as a PNG twin (~150 dpi, same base name). Plots are drawn in three
+  scripts: `guide_representation_plot.R` (per-library plots),
+  `guide_representation_compare_report.R` (the pools comparison plots, drawn
+  inside the report script) and `plot_barcode_position.R` (barcode-position
+  plot); `my_theme.R` is the shared look. Plot steps only read
+  precomputed tables, so no counting or statistics are redone. After the re-run,
+  review the PNG twins.
 - **Changing what's computed:** replace the matching **wrangle** script. Keep
   its output table names, or also replace the plot script so it reads the
   new ones.
 - Each script's header lists the arguments the pipeline passes and the files
   it must write. Keep both compatible. `.py` runs with `python3`, `.R` with
   `Rscript`, anything else with `bash`.
-- To try a plot tweak cheaply, re-run the pipeline. Everything upstream is
-  cached, so only the plot step runs (usually a minute or two).
+- On the cluster the work folder is deleted after a successful run by default,
+  so only with `keep_work: true` (set before the run) do just the plot step and
+  the report re-run after a plot tweak (usually a minute or two). Otherwise the
+  whole pipeline recomputes (~10-20 min for a full lane).
 
 Other settings (`trim5`, `sgrna_len`, `paired_end`,
 `contrasts`) are documented inline in `config.yaml`. Changing one re-runs the
 affected step and everything downstream of it.
+
+## Analyses beyond the pipeline (extra steps)
+
+Custom analysis the pipeline doesn't do (a different statistic, a new plot of
+the results, a comparison across samples, ...) is allowed, as a script of this
+project. *New: the `script` subcommand has not been tested on the cluster yet.*
+
+**Convention**
+
+- The script lives in `utils/<name>.<R|py|sh>`. Its outputs go to
+  `results/<name>/`: a **new** subfolder of `results/` named after the
+  analysis, never one of the pipeline's own outputs (`demultiplexing/`,
+  `counts/`, `mageck_test/`, `intermediate_files/`, `METHODS.md`; see
+  "Results"). The convention is not enforced, so keep to it.
+- Inputs are the pipeline's outputs (`results/counts/*.count.txt`, the
+  `results/mageck_test/` gene summaries) or files the user provides (the user
+  says where; never move raw data). The script reads inputs relative to the
+  project root and writes only to `results/<name>/`.
+
+**Workflow**
+
+1. Ask the user for the context and the question ("Ask about the experiment"
+   applies); record it in `CONTEXT.md`.
+2. `statistician` designs the analysis for anything statistical (method,
+   assumptions, what the result can and cannot say).
+3. `code-supervisor` (via `implementer`) writes `utils/<name>.*`.
+4. The lead runs it: `run_crisprscreen.sh script utils/<name>.R`. It is one LSF
+   job (wait with `bjobs`); never run it on the login node.
+5. `log-inspector` reads `metadata/script_logs/<script>_<YYYYMMDD_HHMMSS>.log`
+   (and the `.lsf.out`/`.lsf.err` next to it).
+6. `results-reporter` / `figure-maker` (PNG) review the results.
+7. `methods-writer` writes `results/<name>/METHODS.md`: the method, the tool and
+   package versions (from the log header and the script) and the parameters.
+
+Commit the script (`utils/` is tracked) after asking the user.
+
+**The `script` subcommand**
+
+```bash
+run_crisprscreen.sh script [--cpus N] [--mem GB] [--time HH:MM] utils/<name>.<R|py|sh> [args...]
+```
+
+- Submits the script as ONE LSF job (defaults 1 core, 8 GB, 4 h) and prints the
+  job ID with `tail -f`, `bjobs` and `bpeek` hints.
+- The script must be inside the project folder. The interpreter follows the
+  extension (`.R` Rscript, `.py` python3, `.sh` bash). The working directory is
+  the project root.
+- Container: `rocker/tidyverse:4.3` for `.R` and `.sh` (R 4.3 + tidyverse, no
+  Bioconductor); the cutadapt biocontainer for `.py` (Python standard library +
+  cutadapt's dependencies only). A lab image with more tools (Bioconductor,
+  samtools, deepTools, ...) is planned.
+- Log: `metadata/script_logs/<script>_<YYYYMMDD_HHMMSS>.log`, with a header
+  (date, project, script, md5, args, image, image ID, CPU/memory budget, working
+  directory) and a footer `-- exit code N --`; `.lsf.out` and `.lsf.err` are
+  written next to it.
+
+**Tiers**
+
+- **Tier 1 (default):** run through `script`, so it uses the pinned container,
+  has resource limits and a log. Installing R/Bioconductor packages inside the
+  container at run time is NOT allowed (not reproducible).
+- **Tier 2 (fallback, only when no lab container has the tool or package):** ask
+  the user explicitly. If they agree, run it as an LSF job with a conda
+  environment the user names, never on the login node. Record the exact versions
+  (R `sessionInfo()`, `pip freeze` / `conda list`) in `results/<name>/` and
+  `CONTEXT.md`, and say in the Methods that it ran outside the pinned
+  containers.
+- Never install software system-wide or edit the pipeline folder without
+  asking. The pipeline's own steps are still only run with
+  plain `run_crisprscreen.sh`; never call `nextflow`, `mageck`, `cutadapt` or
+  `apptainer` directly.
 
 ## Results
 
@@ -301,7 +394,7 @@ results/demultiplexing/log/                 cutadapt log (+ command.sh)
 results/demultiplexing/qc/fastqc/           per-sample FastQC
 results/demultiplexing/qc/multiqc/          multiqc_report.html — start here for read QC
 results/demultiplexing/qc/cutadapt_stats/   per-sample read counts, demux rate, uniformity
-results/demultiplexing/qc/demux_plots/      barcode-position density (+ CSV): one sharp shared peak = consistent read structure
+results/demultiplexing/qc/demux_plots/      barcode-position density (SVG + PNG, + CSV): one sharp shared peak = consistent read structure
 results/counts/*.count.txt                  raw sgRNA counts (count_normalized.txt: median-normalized)
 results/counts/*.unmapped.txt               reads mageck couldn't match to a guide (mageck count is always
                                              exact-match-only), one column per sample — feeds read classification
@@ -310,13 +403,19 @@ results/counts/qc/anchor_discovery/         only when trim5 is unset (the defaul
 results/counts/qc/tables/                   every number behind the count QC plots; *_qc_summary.csv = one row per sample, with flags;
                                              with >1 library, <project_name>_library_breakdown*.csv = % of each sample's reads per library
 results/counts/qc/plots/                    guide representation, Lorenz/Gini, ECDF, mapping rate (= % exact
-                                             match), read classification (exact/near-miss/far-miss), ... SVGs
+                                             match), read classification (exact/near-miss/far-miss), ... each as SVG
+                                             plus a PNG twin (~150 dpi, same base name)
+results/counts/qc/plots/pools_comparison/   only with >1 library: <project_name>_pools_<name>.svg/.png (guide_rep, ecdf,
+                                             lorenz, density, controls, gc, class, breakdown, bar_Gini, bar_ratio_90_10,
+                                             bar_pct_undetected, bar_mapping_pct; some only when the data exist)
 results/counts/qc/report/                   <prefix>_qc_report.html — one page per library: every plot above with what it
                                              means, how to read it, and what to check if it looks poor. Start here.
                                              With >1 library: also <project_name>_pools_comparison_qc_report.html,
                                              the same plots faceted one panel per pool, for spotting the odd one out.
 results/mageck_test/<treatment>_vs_<control>/   gene_summary / sgrna_summary (only if contrasts.csv is set; ^ and $ dropped from the names)
 results/METHODS.md                          this outdir's copy of METHODS.md (the project-root copy = latest successful run)
+results/<name>/                             your own analyses (see "Analyses beyond the pipeline"): one new folder per
+                                             script, with its own METHODS.md; written by `run_crisprscreen.sh script`, not the pipeline
 ```
 
 `METHODS.md` (project root, and a copy in the outdir) is the Materials and Methods of the
@@ -361,12 +460,20 @@ Delegate with the same table as `CLAUDE.md`; every task in it goes to its agent:
 Rules for every subagent:
 
 - Read-only in the pipeline folder `/project/rephilllab/CRISPR_SCREEN/HPC`; never edit `original_data/`.
-- Never start, stop or clean a run: only the lead does that, with `run_crisprscreen.sh`. The Hard rules
-  apply to subagents too (no `nextflow`, `mageck`, `cutadapt`, `Rscript`, analysis scripts, `bsub`).
+- Never start, stop or clean a run, and never run a project script: only the lead does that, with
+  `run_crisprscreen.sh` (`run` or `script`). The Hard rules apply to subagents too (no `nextflow`,
+  `mageck`, `cutadapt`, `apptainer`, `bsub`, and no `Rscript`/`python` on the login node).
 - Files they change are in this project. Git is the backup: the lead commits after asking the user.
 
 If `.claude/agents/` is missing, this project predates the kit: `init` of a newer pipeline version
 creates it, or copy `/project/rephilllab/CRISPR_SCREEN/HPC/agent/.claude` here (`cp -R`).
+
+If the agents above are not listed as available subagent types in this session (the project folder
+and its `.claude/agents/` were created mid-session by `init`), either spawn a general-purpose agent
+whose prompt is the agent file's body (everything after the frontmatter) plus the brief, with the
+model from the file's frontmatter, or ask the user to restart Claude Code in the project folder.
+Starting Claude Code inside the project folder is recommended for every later session, so it loads
+this project's `CLAUDE.md` and agents.
 
 ## Documentation
 

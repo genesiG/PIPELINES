@@ -21,8 +21,8 @@ pipeline as on the PMACS cluster (same tools, same versions, same outputs), pack
   (on by default on most computers).
 - **6 GB of memory or more** (8 GB or more lets more steps run side by side; the pipeline itself needs about 2.5 GB).
 - Free disk space: about **2× the size of your raw FASTQ files** on the project's
-  drive (per-sample FASTQs and, while a run is going, `work\`), plus space for
-  results and ~8 GB once for the Docker image. The raw FASTQs are not copied.
+  drive (per-sample FASTQs and Nextflow's working folder `metadata\work\`), plus
+  space for results and ~8 GB once for the Docker image. The raw FASTQs are not copied.
 - Internet the first time (to download Docker and build the image).
 
 ## One-time setup (per computer)
@@ -90,16 +90,31 @@ pipeline as on the PMACS cluster (same tools, same versions, same outputs), pack
 5. **Results** are in `results\` — start with
    `results\counts\qc\report\*_qc_report.html` (open in a browser; every plot
    is explained) and `results\demultiplexing\qc\multiqc\multiqc_report.html`.
-   `METHODS.md` describes exactly what was done, for your paper.
+   `METHODS.md` describes exactly what was done, for your paper. Every plot is
+   saved twice, as SVG and as a PNG with the same name (handy for slides); with
+   more than one library, `results\counts\qc\plots\pools_comparison\` also has
+   plots comparing the libraries.
 
 **If something fails**, `.\utils\run_crisprscreen.bat status` says which step and
 why (details in `metadata\failed_tasks\`). Fix the input and run again: steps
 that already finished are reused, not redone.
 
-**Re-running a finished project** recomputes everything (about 10-20 min for a
-full lane), because `work\` (and `.nextflow\`) is deleted after a successful run. To reuse the
-finished steps, e.g. after adding contrasts, set `keep_work: true` in
-`config.yaml` before the run.
+**Re-running a finished project** only redoes what changed (e.g. after adding
+contrasts, or tweaking a plot: just that step and the report), because
+Nextflow's working folder `metadata\work\` and its resume cache
+`metadata\.nextflow\` are kept by default (`keep_work: true`). To free the disk
+space instead, run `.\utils\run_crisprscreen.bat clean` (asks first; results are
+kept) or set `keep_work: false` in `config.yaml` (deletes them after a successful
+run); the next run then recomputes everything (about 10-20 min for a full lane).
+A failed or stopped run always keeps them. If you see a `work\` or `.nextflow\`
+folder directly in the project folder, it is from an older version of the
+pipeline and is no longer used; `clean` removes it.
+
+**Your own analysis** (a plot or test the pipeline doesn't do): put the script in
+`utils\` (`.R`, `.py` or `.sh`) and run it with
+`.\utils\run_crisprscreen.bat script utils\my_analysis.R`. It runs in the
+pipeline's software environment and its log goes to `metadata\script_logs\`. See
+"Analyses beyond the pipeline" in the project's `AGENTS.md`.
 
 ## All commands
 
@@ -115,7 +130,8 @@ after setup (`run_crisprscreen ...`, acts on the current folder):
 | `run_crisprscreen status` | running? finished? which step failed and why? |
 | `run_crisprscreen logs` | watch the live log (Ctrl+C stops watching, not the analysis) |
 | `run_crisprscreen stop` | stop the analysis (running again resumes it) |
-| `run_crisprscreen clean` | delete `work\` now (rarely needed: it is deleted after a successful run (with `.nextflow\`) unless `keep_work: true`; use after a failed run) |
+| `run_crisprscreen clean` | delete Nextflow's working folder `metadata\work\` and resume cache `metadata\.nextflow\` (and any old root `work\` / `.nextflow\`) to free disk space; asks first (`--yes` skips); the next run starts from scratch, results are kept |
+| `run_crisprscreen script utils\NAME.R [args]` | run your own script (`.R`, `.py`, `.sh`; inside the project folder) in the pipeline's software environment; log in `metadata\script_logs\` |
 
 ## Resources: how much of the computer an analysis uses
 
@@ -152,10 +168,15 @@ Each run prints its budget at the start.
   room for only one or two steps at a time; a run refuses to start, with an
   explanation, if the budget is below that.
 - **Disk:** plan about 2× the size of your raw FASTQ files (per-sample FASTQs and
-  `work\` while a run is going), plus space for results. The raw FASTQs are not
-  copied. `work\` and `.nextflow\` are deleted after a successful run unless `keep_work: true` (in
-  `config.yaml`, default `false`); failed or stopped runs keep it, so a re-run
-  resumes. Intermediate files are in `results\intermediate_files\`. Keep the
+  `metadata\work\`), plus space for results. The raw FASTQs are not
+  copied. `metadata\work\` and `metadata\.nextflow\` are kept after a run
+  (`keep_work: true` in `config.yaml`, the default), so a re-run only redoes what
+  changed. Files in `results\` and `original_data\` are hard links to the files in
+  `metadata\work\` when the disk allows (the run log says "publish mode: link" or
+  "copy"), so big FASTQs are not stored twice; never edit such a file in place
+  (replacing or deleting it is fine). To free space: `run_crisprscreen clean`, or
+  `keep_work: false` (deletes them after a successful run). Intermediate files
+  are in `results\intermediate_files\`. Keep the
   project on an internal SSD:
   on a hard disk drive (HDD), USB drive or network share demultiplexing is
   several times slower, and Windows may respond sluggishly while it runs
@@ -197,7 +218,8 @@ Each run prints its budget at the start.
 - **Customizing a step** for one project (plot colors, extra MAGeCK
   options, ...) without changing it for the lab: see "Customizing" in the
   project's `AGENTS.md` — copy the script from this folder's `bin\` into the
-  project's `utils\` and point `config.yaml` at it.
+  project's `utils\` and point `config.yaml` at it. Changing a `<script>_args`
+  line in `config.yaml` also re-runs that step.
 - **Updating the pipeline:** `git pull` in the CRISPR_SCREEN folder. If the
   update changed the Docker image, the next run rebuilds it automatically.
 

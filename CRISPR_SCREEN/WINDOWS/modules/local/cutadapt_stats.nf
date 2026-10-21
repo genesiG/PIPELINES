@@ -3,7 +3,7 @@
  * metrics (Gini, CV, min/max fold) — ported from step_1qc.py's
  * run_cutadapt_stats(). Python stdlib only.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process CUTADAPT_STATS {
     tag "${params.project_name}"
@@ -29,7 +29,7 @@ process CUTADAPT_STATS {
         --samplesheet "${samplesheet}" \\
         --project-name "${params.project_name}" \\
         --outdir . \\
-        ${extraArgs('cutadapt_stats')}
+        ${params.cutadapt_stats_args ?: ''}
     """
 
     stub:

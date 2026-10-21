@@ -22,7 +22,7 @@
  * mode 'copy' regardless of publish_mode: a symlink into the work
  * directory would break once that is cleaned.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process METHODS {
     tag "${params.project_name}"
@@ -54,7 +54,7 @@ process METHODS {
         --output METHODS.md \\
         --run-info-out run_info.json \\
         --versions-out software_versions.tsv \\
-        ${extraArgs('write_methods')}
+        ${params.write_methods_args ?: ''}
     """
 
     stub:   // runs the real (stdlib-only) writer on the stub outputs, so -stub-run exercises it too
@@ -66,6 +66,6 @@ process METHODS {
         --output METHODS.md \\
         --run-info-out run_info.json \\
         --versions-out software_versions.tsv \\
-        ${extraArgs('write_methods')}
+        ${params.write_methods_args ?: ''}
     """
 }

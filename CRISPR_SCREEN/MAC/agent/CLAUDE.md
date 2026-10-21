@@ -29,12 +29,29 @@ the table goes to its agent.
 | After every run, success or failure | `log-inspector`, then `results-reporter` on success | haiku |
 | Comparing with earlier or collaborator numbers | `output-verifier` | haiku |
 | Statistics questions and contrast design | `statistician` | sonnet |
-| Plots | `figure-maker` | sonnet |
+| Plots (replace the right script in `utils/`, re-run, review the PNGs) | `figure-maker` | sonnet |
 | Methods text | `methods-writer` | sonnet |
-| Edits to `utils/` scripts or project CSVs beyond a trivial fix | `code-supervisor` (spawns `implementer`) | sonnet |
+| Edits to `utils/` scripts or project CSVs beyond a trivial fix; writing an extra-analysis script | `code-supervisor` (spawns `implementer`) | sonnet |
 | Outside facts (tool flags, library formats) | `web-researcher` | haiku |
 | Papers and citations | `literature-scout` | sonnet |
 | How MAGeCK or the pipeline code works | `code-researcher` | sonnet |
+
+If the agents are not listed as available subagent types (e.g. Claude Code was started
+outside this folder), spawn a general-purpose agent whose prompt is the agent file's body
+(after the frontmatter) plus the brief, with the model from the file's frontmatter, or ask
+the user to restart Claude Code in this project folder (recommended for every session).
+
+## Analyses beyond the pipeline
+
+The user may ask for an analysis the pipeline doesn't do. That is allowed: the script goes
+in `utils/<name>.<R|py|sh>`, writes only to a new `results/<name>/`, and is run by you with
+`./utils/run_crisprscreen.sh script utils/<name>.R` (pinned image, memory limits, log in
+`metadata/script_logs/`). Order: ask the user for context and question (record in
+`CONTEXT.md`), `statistician` designs it, `code-supervisor` writes it, you run it,
+`log-inspector` reads the log, `results-reporter`/`figure-maker` review, `methods-writer`
+writes `results/<name>/METHODS.md`. If the image lacks a needed tool, ask the user before
+running anything on the host. Never install software or edit the pipeline folder without
+asking. Full rules: "Analyses beyond the pipeline" in `AGENTS.md`.
 
 ## How to brief
 

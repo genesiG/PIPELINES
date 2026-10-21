@@ -21,6 +21,7 @@ What to read (only the files that exist)
 - results/counts/qc/report/*_qc_report.html and *_pools_comparison_qc_report.html: name them and point to them. Read only the headings, not the HTML.
 - results/demultiplexing/qc/cutadapt_stats/: read counts and demultiplexing rate, if present.
 - results/mageck_test/<treatment>_vs_<control>/*.gene_summary.txt: the top ~10 negative and top ~10 positive genes by rank. Copy the columns exactly.
+- results/<name>/ (custom analyses, only when asked): summarise its tables and figures and say which script (utils/<name>.*) and which log (metadata/script_logs/<script>_<timestamp>.log) they came from; check the log footer `-- exit code N --`.
 - Run `wc -l` first. Use head, sort and cut on tables; never read a large count table whole.
 
 Rules

@@ -18,6 +18,8 @@ Where to look
 - `metadata/pipeline_info/execution_trace.txt` (per-step status: COMPLETED, CACHED, FAILED).
 - `metadata/failed_tasks/<timestamp>/<step>/`: `command.sh`, `command.err`, `command.log`, `exitcode`.
 - `results/**/log/*.log`, with the `*_command.sh` saved next to each one.
+- `metadata/script_logs/<script>_<YYYYMMDD_HHMMSS>.log` from the launcher's `script` subcommand (extra analyses): read the header (date, project, script, md5, args, image, image ID, CPU/memory budget, working dir) and the footer `-- exit code N --`; a non-zero or missing footer is a failure. On HPC also read the `.lsf.out` and `.lsf.err` next to it.
+- When tracing a failure on the Docker versions, the Nextflow work folder `metadata/work` (on HPC: `/project/rephilllab/nf_work/<user>/<project>`).
 
 Rules
 - Run `wc -l` on every log before reading it. For long logs read `head -20`, `tail -80` and keyword greps (ERROR, exit, WARN). Never read a log over 1000 lines whole.

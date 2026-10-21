@@ -136,8 +136,13 @@ on synthetic data before using real data, see `test/README.md` in this folder.
 - Results are in `results/`. QC reports are in `results/counts/qc/report/`, and
   `METHODS.md` (the Materials and Methods of the run) is written to the project
   folder and to `results/`.
-- The work folder under `nf_work/` is deleted after a successful run unless
-  `config.yaml` sets `keep_work: true`. Failed or stopped runs keep it.
+- The work folder (`/project/rephilllab/nf_work/<user>/<project>/`, not in the
+  project folder) is deleted after a successful run unless `config.yaml` sets
+  `keep_work: true` (default `false`). Failed or stopped runs keep it.
+  `publish_mode` is `copy` (`auto` also means copy), so `results/` holds real copies.
+- To run a project's own analysis script as an LSF job (never on the login node):
+  `run_crisprscreen.sh script utils/<name>.R` (new, not yet tested on the cluster).
+  Its logs are in `metadata/script_logs/`.
 - Never run Nextflow, analysis scripts, or other memory-heavy commands on the
   login node. It has a memory cap of about 2 GB (`AGENTS.md`). Use the LSF
   job submitted by the launcher, or a test submitted with `bsub`.

@@ -16,7 +16,7 @@
  * trim5 explicitly to bypass discovery entirely and use the old
  * fixed-position behavior.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process GUIDE_ANCHOR_DISCOVERY {
     tag "${lib_name}"
@@ -45,7 +45,7 @@ process GUIDE_ANCHOR_DISCOVERY {
         --library-name "${lib_name}" \\
         --library "${mageck_library}" \\
         --outdir . \\
-        ${extraArgs('discover_anchor')}
+        ${params.discover_anchor_args ?: ''}
     """
 
     stub:

@@ -10,8 +10,11 @@
  * Reads only GUIDE_REPRESENTATION_WRANGLE's tables (collected across every
  * library) and rebuilds its own comparison plots from them — it never reruns
  * `mageck count` or reads another library's count table directly.
+ *
+ * Each comparison plot is also written as SVG + PNG under pools_comparison/,
+ * published to counts/qc/plots/pools_comparison.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process GUIDE_REPRESENTATION_COMPARE_REPORT {
     tag "${params.project_name}"
@@ -22,6 +25,7 @@ process GUIDE_REPRESENTATION_COMPARE_REPORT {
     // command.sh excluded here, published separately below -- see
     // guide_representation.nf for why (no pattern would otherwise also match it).
     publishDir "${params.outdir}/counts/qc/report", mode: params.publish_mode, pattern: "${params.project_name}_pools_comparison_qc_report.html"
+    publishDir "${params.outdir}/counts/qc/plots/pools_comparison", mode: params.publish_mode, pattern: "pools_comparison/*", saveAs: { fn -> file(fn).name }
     publishDir "${params.outdir}/counts/qc/report/log", mode: params.publish_mode, pattern: "command.sh", saveAs: { "${params.project_name}_pools_comparison_command.sh" }
 
     input:
@@ -31,6 +35,7 @@ process GUIDE_REPRESENTATION_COMPARE_REPORT {
 
     output:
     path "${params.project_name}_pools_comparison_qc_report.html", emit: report
+    path "pools_comparison/*", emit: plots
     path "command.sh", emit: command_sh
 
     script:
@@ -40,11 +45,13 @@ process GUIDE_REPRESENTATION_COMPARE_REPORT {
         --project="${params.project_name}" \\
         --theme="${theme}" \\
         --outdir=. \\
-        ${extraArgs('guide_representation_compare_report')}
+        ${params.guide_representation_compare_report_args ?: ''}
     """
 
     stub:
     """
     touch "${params.project_name}_pools_comparison_qc_report.html"
+    mkdir -p pools_comparison
+    touch "pools_comparison/${params.project_name}_pools_stub.svg" "pools_comparison/${params.project_name}_pools_stub.png"
     """
 }

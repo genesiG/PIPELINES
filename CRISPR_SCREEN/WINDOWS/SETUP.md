@@ -59,8 +59,10 @@ Decide and report:
   slower and Windows may respond slowly meanwhile.
 - **Free space**: Docker data ~5-20 GB (grows with each pipeline image and
   rebuild); each project needs roughly 1-2x the size of its raw FASTQ (per-sample
-  FASTQs + `work/` while a run is going; `work/` is removed after a successful run
-  unless `keep_work: true`), the raw FASTQ itself stays in the FASTQ folder.
+  FASTQs + Nextflow's `metadata\work\` folder; it is kept by default so a re-run
+  resumes, and `run_crisprscreen clean` or `keep_work: false` frees it; published
+  files are hard links to it when the disk allows, so big FASTQs are not stored
+  twice), the raw FASTQ itself stays in the FASTQ folder.
 - **Virtualization**: `False` means it must be enabled in the
   BIOS/UEFI (Intel VT-x / AMD SVM) — that is for the user or their IT, not you.
 - **Memory hogs**: note big consumers (browsers with many tabs, IDE language

@@ -22,8 +22,9 @@ yourself.
 - macOS 13 (Ventura) or newer.
 - **6 GB of memory or more** (8 GB or more lets more steps run side by side; the pipeline itself needs about 2.5 GB).
 - Free disk space: about **2× the size of your raw FASTQ files** on the project's
-  disk (per-sample FASTQs and, while a run is going, `work/`), plus space for
-  results and ~8 GB once for the Docker image. The raw FASTQs are not copied.
+  disk (per-sample FASTQs and the pipeline's working files in `metadata/work/`),
+  plus space for results and ~8 GB once for the Docker image. The raw FASTQs are
+  not copied.
 - Internet the first time (to download Docker and build the image).
 
 ## One-time setup (per Mac)
@@ -97,16 +98,32 @@ yourself.
 5. **Results** are in `results/` — start with
    `results/counts/qc/report/*_qc_report.html` (open in a browser; every plot
    is explained) and `results/demultiplexing/qc/multiqc/multiqc_report.html`.
+   Every plot is saved twice, as SVG and as a PNG with the same name (handy for
+   slides); with more than one library, the plots that compare the pools are in
+   `results/counts/qc/plots/pools_comparison/`.
    `METHODS.md` describes exactly what was done, for your paper.
 
 **If something fails**, `./utils/run_crisprscreen.sh status` says which step and
 why (details in `metadata/failed_tasks/`). Fix the input and run again: steps
 that already finished are reused, not redone.
 
-**Re-running a finished project** recomputes everything (about 10-20 min for a
-full lane), because `work/` (and `.nextflow/`) is deleted after a successful run. To reuse the
-finished steps, e.g. after adding contrasts, set `keep_work: true` in
-`config.yaml` before the run.
+**Re-running a finished project** only redoes what changed (e.g. a plot tweak
+re-runs just the plot step and the report; adding contrasts only does the new
+part), because the pipeline's working files are kept in `metadata/work/` (and
+`metadata/.nextflow/`). If you set `keep_work: false` in `config.yaml`, they are
+deleted after a successful run and re-running recomputes everything (about 10-20
+min for a full lane). To free the disk space, see "Disk" below.
+
+**Your own analysis** (beyond what the pipeline does): put a script in the
+project's `utils/` (`.R`, `.py` or `.sh`) and run it with
+`./utils/run_crisprscreen.sh script utils/my_analysis.R`. It runs in the pipeline's
+Docker image (same memory limits as a run), from the project folder, so it reads
+`results/...` and should write to its own folder, `results/my_analysis/`. Its
+log is saved in `metadata/script_logs/`. The image has R 4.3.3 with the tidyverse
+(ggplot2, dplyr, ...), data.table, yaml, jsonlite, ragg, knitr/rmarkdown, but no
+Bioconductor packages (no DESeq2, edgeR, limma, ComplexHeatmap, pheatmap), and
+Python 3.9 with only its standard library (no pandas, no numpy). A lab image with
+more tools is planned. An AI agent can write and run such a script for you.
 
 ## All commands
 
@@ -122,7 +139,8 @@ after setup (`run_crisprscreen.sh ...`, acts on the current folder):
 | `run_crisprscreen.sh status` | running? finished? which step failed and why? |
 | `run_crisprscreen.sh logs` | watch the live log (Ctrl+C stops watching, not the analysis) |
 | `run_crisprscreen.sh stop` | stop the analysis (running again resumes it) |
-| `run_crisprscreen.sh clean` | delete `work/` now (rarely needed: it is deleted after a successful run (with `.nextflow/`) unless `keep_work: true`; use after a failed run) |
+| `run_crisprscreen.sh clean` | free disk space: delete `metadata/work/` and `metadata/.nextflow/` (and a leftover root `work/` and `.nextflow/` from older versions); asks first unless `--yes`; the next run starts from scratch, results are kept |
+| `run_crisprscreen.sh script utils/NAME.R` | run your own analysis script in the pipeline's software environment (`.R`, `.py` or `.sh`; extra arguments are passed on); log in `metadata/script_logs/` |
 
 ## Resources: how much of the Mac an analysis uses
 
@@ -157,10 +175,19 @@ Each run prints its budget at the start.
   room for only one or two steps at a time; a run refuses to start, with an
   explanation, if the budget is below that.
 - **Disk:** plan about 2× the size of your raw FASTQ files (per-sample FASTQs and
-  `work/` while a run is going), plus space for results. The raw FASTQs are not
-  copied. `work/` and `.nextflow/` are deleted after a successful run unless `keep_work: true` (in
-  `config.yaml`, default `false`); failed or stopped runs keep it, so a re-run
-  resumes. Intermediate files are in `results/intermediate_files/`.
+  the working files), plus space for results. The raw FASTQs are not copied. The
+  working files stay in `metadata/work/` (and the resume cache in
+  `metadata/.nextflow/`) by default (`keep_work: true` in `config.yaml`), so a
+  re-run only redoes what changed. Files in `results/` and `original_data/` are
+  hard links to those working files when the disk allows (`publish_mode: auto`;
+  the run log says `publish mode: link ...` or `copy ...`), so the big FASTQs are
+  not stored twice. For that reason, never edit a file in `results/` in place
+  (replacing or deleting it is fine). To free space, run
+  `./utils/run_crisprscreen.sh clean` (it asks first; the next run starts from
+  scratch, results are kept), or set `keep_work: false` in `config.yaml` (the
+  working files are deleted after each successful run; re-running then recomputes
+  everything, ~10-20 min for a full lane). Intermediate files are in
+  `results/intermediate_files/`.
 
 ### What protects a small computer
 

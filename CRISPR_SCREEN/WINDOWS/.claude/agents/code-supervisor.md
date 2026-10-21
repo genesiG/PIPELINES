@@ -13,7 +13,8 @@ Project rules (all agents)
 - The pipeline folder is read-only, and raw FASTQs (wherever config.yaml points) and original_data/ are never touched.
 - Never start, stop, clean or resume a run, and never run docker, nextflow, mageck, cutadapt, Rscript or pipeline scripts.
 - Be OS-neutral: write Windows paths with \ (PowerShell or Git Bash) and Mac/Linux paths with /.
-- Only implementer may change: utils/ scripts, samplesheet.csv, library files, contrasts.csv, and config.yaml when the spec says so.
+- Only implementer may change: utils/ scripts (including extra-analysis scripts utils/<name>.<R|py|sh>), samplesheet.csv, library files, contrasts.csv, and config.yaml when the spec says so.
+- Extra analyses beyond the pipeline are allowed: implementer may create or edit utils/<name>.<R|py|sh> that reads inputs relative to the project root and writes only to a new folder results/<name>/ (never demultiplexing, counts, mageck_test or intermediate_files). Neither of you runs R or python files: the lead runs them with the launcher's `script` subcommand (`.\utils\run_crisprscreen.bat script utils\<name>.R [args]` on Windows, `./utils/run_crisprscreen.sh script utils/<name>.R [args]` on Mac, `run_crisprscreen.sh script utils/<name>.R [args]` on HPC).
 - Never assume the biology or how the experiment was done or processed (screen type, what each sample is, replicates, timepoints, controls, expected hits, library preparation). Use only the context in your brief or in the project's CONTEXT.md, and never infer it from sample or file names. If something you need is missing, list it under "Questions for the user" at the end of your return instead of guessing. If the data seem to contradict the stated context, report the numbers and the file; don't reinterpret the design.
 
 Workflow
@@ -26,7 +27,8 @@ Workflow
    - config.yaml keys name a real pipeline script, and every path they point to exists;
    - CSV headers intact, sample names unique and made of letters, digits and _, library gRNA_IDs and sequences unique;
    - other callers of anything renamed (grep the project);
-   - `python3 -m py_compile` passes for .py files; R files are only read, never run.
+   - `python3 -m py_compile` passes for .py files; R files are only read, never run;
+   - an extra-analysis script reads only pipeline outputs or files the spec names and writes only under results/<name>/.
 4. If there are problems, send a numbered fix list to the same implementer (SendMessage). Allow at most 2 revision rounds. If it still fails, spawn one implementer with `model: "sonnet"` and the full fix list. If that also fails, stop and report.
 5. Only spawn `implementer`. If the task needs a statistical judgement, stop and tell the lead to use statistician.
 

@@ -54,8 +54,10 @@ Decide and report:
   external HDD work but demultiplexing is several times slower.
 - **Free space**: Docker data ~5-20 GB (grows with each pipeline image and
   rebuild); each project needs roughly 1-2x the size of its raw FASTQ (per-sample
-  FASTQs + `work/` while a run is going; `work/` is removed after a successful run
-  unless `keep_work: true`); the raw FASTQ itself stays in the FASTQ folder.
+  FASTQs + Nextflow's working files in `metadata/work/`, which are kept by default so
+  a re-run only redoes what changed; big files are hard-linked, not stored twice;
+  `clean` or `keep_work: false` frees the space); the raw FASTQ itself stays in the
+  FASTQ folder.
 - **Memory hogs**: note big consumers (browsers with many tabs, IDE language
   servers, R/Python sessions with parallel workers). See section 5.
 

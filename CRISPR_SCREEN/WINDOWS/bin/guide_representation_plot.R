@@ -10,14 +10,17 @@
 #'
 #' USAGE:
 #'   Rscript guide_representation_plot.R --tables-dir=<dir> --prefix=<prefix> \
-#'       [--theme=<theme.R>] [--outdir=<dir>] [--dpi=300]
+#'       [--theme=<theme.R>] [--outdir=<dir>] [--dpi=150]
 #'
 #'   --tables-dir  directory holding <prefix>_*.csv from the wrangle step
 #'   --prefix      count-table prefix (e.g. MYSCREEN_library)
 #'   --theme       R file defining a ggplot2 theme object named `my_theme`
 #'                 (default: my_theme.R next to this script)
-#'   --outdir      where to write PNGs (default: current directory)
-#'   --dpi         PNG resolution (default: 300)
+#'   --outdir      where to write the plots (default: current directory)
+#'   --dpi         PNG resolution (default: 150)
+#'
+#' Every plot is written as an SVG and a PNG twin (same base name, default 150 dpi,
+#' same width/height in inches), so viewers that cannot render SVG can open it.
 #'
 #' Any plot whose input table is absent (e.g. no mapping-rate table because
 #' no MAGeCK log was given) is skipped with a note, not an error.
@@ -41,12 +44,12 @@ parse_args <- function(args) {
 }
 opt <- parse_args(commandArgs(trailingOnly = TRUE))
 if (is.null(opt[["tables-dir"]]) || is.null(opt$prefix)) {
-  stop("Usage: guide_representation_plot.R --tables-dir=<dir> --prefix=<prefix> [--theme=<theme.R>] [--outdir=<dir>] [--dpi=300]")
+  stop("Usage: guide_representation_plot.R --tables-dir=<dir> --prefix=<prefix> [--theme=<theme.R>] [--outdir=<dir>] [--dpi=150]")
 }
 tables_dir <- opt[["tables-dir"]]
 prefix <- opt$prefix
 outdir <- if (is.null(opt$outdir)) "." else opt$outdir
-dpi <- as.numeric(if (is.null(opt$dpi)) "300" else opt$dpi)
+dpi <- as.numeric(if (is.null(opt$dpi)) "150" else opt$dpi)
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
 theme_file <- opt$theme
@@ -64,12 +67,26 @@ read_table <- function(name) {
   }
   read.csv(path, check.names = FALSE)
 }
+# PNG twin of every SVG, for viewers that cannot render SVG (e.g. AI agents).
+# ragg (ships with the tidyverse image) if present, else base png() on cairo.
+save_png <- function(p, path, width, height, dpi = 150) {
+  if (requireNamespace("ragg", quietly = TRUE)) {
+    ragg::agg_png(filename = path, width = width, height = height, units = "in", res = dpi)
+  } else {
+    grDevices::png(filename = path, width = width, height = height, units = "in", res = dpi, type = "cairo")
+  }
+  print(p)
+  invisible(grDevices::dev.off())
+}
 save_plot <- function(p, name, width, height) {
   path <- file.path(outdir, paste0(prefix, "_", name, ".svg"))
   grDevices::svg(filename = path, width = width, height = height)
   print(p)
   invisible(dev.off())
   cat("  Saved:", path, "\n")
+  png_path <- sub("\\.svg$", ".png", path)
+  save_png(p, png_path, width, height, dpi = dpi)
+  cat("  Saved:", png_path, "\n")
 }
 skip <- function(what, table) cat("  [skip]", what, "— no", paste0(prefix, "_", table, ".csv"), "\n")
 centered_title <- theme(plot.title = element_text(hjust = 0.5))

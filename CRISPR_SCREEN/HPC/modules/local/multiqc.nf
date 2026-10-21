@@ -1,4 +1,4 @@
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process MULTIQC {
     tag "${params.project_name}"
@@ -19,7 +19,7 @@ process MULTIQC {
 
     script:
     """
-    ${runner(step_script)} "${step_script}" ${extraArgs('multiqc')}
+    ${runner(step_script)} "${step_script}" ${params.multiqc_args ?: ''}
     """
 
     stub:

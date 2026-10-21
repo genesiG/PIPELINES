@@ -10,6 +10,16 @@
 #
 #   run_crisprscreen.sh init             — set up a new project directory here
 #   run_crisprscreen.sh [config.yaml]    — run the pipeline
+#   run_crisprscreen.sh script [--cpus N] [--mem GB] [--time HH:MM] utils/X.R [ARGS]
+#                                        — run one of the project's own scripts
+#                                          (.R, .py or .sh) in the pipeline's software
+#                                          environment as an LSF job
+#
+# `script` submits one LSF job that runs the script under Apptainer, from the
+# project folder. The flags (defaults 1 core, 8 GB, 4:00) are read only between
+# `script` and the script path (an optional `--` may follow them); everything after
+# the script path is passed to the script verbatim. The script must be inside the
+# project folder. Its log goes to metadata/script_logs/ in the project.
 #
 # `init` only scaffolds directories, fetches config.yaml + examples/, the
 # default barcode-position plot script into utils/ (its md5 goes in
@@ -162,6 +172,191 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
+# script — run one of the project's own scripts in the pipeline's software
+# environment, as one LSF job. Nothing runs on the login node: only bsub is
+# called here. Needs no config.yaml.
+# ---------------------------------------------------------------------------
+if [[ "${1:-}" == "script" ]]; then
+    shift
+    PROJECT_DIR="$(pwd)"
+    SCRIPT_CPUS=1
+    SCRIPT_MEM=8
+    SCRIPT_TIME="4:00"
+
+    # Flags are read only between `script` and the script path.
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --cpus|--mem|--time)
+                if [[ $# -lt 2 ]]; then
+                    echo "ERROR: $1 needs a value." >&2
+                    exit 1
+                fi
+                case "$1" in
+                    --cpus) SCRIPT_CPUS="$2" ;;
+                    --mem)  SCRIPT_MEM="$2" ;;
+                    *)      SCRIPT_TIME="$2" ;;
+                esac
+                shift 2 ;;
+            --) shift; break ;;
+            *) break ;;
+        esac
+    done
+
+    if [[ ! "${SCRIPT_CPUS}" =~ ^[0-9]+$ ]] || (( 10#${SCRIPT_CPUS} < 1 )); then
+        echo "ERROR: --cpus must be an integer >= 1 (got '${SCRIPT_CPUS}')." >&2
+        exit 1
+    fi
+    if [[ ! "${SCRIPT_MEM}" =~ ^[0-9]+$ ]] || (( 10#${SCRIPT_MEM} < 1 )); then
+        echo "ERROR: --mem must be an integer number of GB >= 1 (got '${SCRIPT_MEM}')." >&2
+        exit 1
+    fi
+    if [[ ! "${SCRIPT_TIME}" =~ ^[0-9]+:[0-9]{2}$ ]]; then
+        echo "ERROR: --time must be HH:MM (got '${SCRIPT_TIME}')." >&2
+        exit 1
+    fi
+
+    if [[ $# -eq 0 ]]; then
+        echo "ERROR: usage: run_${PIPELINE_NAME}.sh script [--cpus N] [--mem GB] [--time HH:MM] utils/<name>.<R|py|sh> [args...]" >&2
+        exit 1
+    fi
+    SCRIPT_ARG="$1"
+    shift
+
+    # ---- The script: inside the project folder, a regular file, known type --
+    if [[ "${SCRIPT_ARG}" == /* ]]; then
+        SCRIPT_ABS="${SCRIPT_ARG}"
+    else
+        SCRIPT_ABS="${PROJECT_DIR}/${SCRIPT_ARG}"
+    fi
+    if [[ ! -e "${SCRIPT_ABS}" ]]; then
+        echo "ERROR: script not found: ${SCRIPT_ARG} (looked for ${SCRIPT_ABS})" >&2
+        exit 1
+    fi
+    if [[ ! -f "${SCRIPT_ABS}" ]]; then
+        echo "ERROR: ${SCRIPT_ARG} is not a regular file." >&2
+        exit 1
+    fi
+    SCRIPT_REAL="$(readlink -f "${SCRIPT_ABS}")"
+    PROJECT_REAL="$(readlink -f "${PROJECT_DIR}")"
+    if [[ "${SCRIPT_REAL}" != "${PROJECT_REAL}/"* ]]; then
+        echo "ERROR: the script must be inside the project folder" >&2
+        exit 1
+    fi
+    SCRIPT_REL="${SCRIPT_REAL#"${PROJECT_REAL}/"}"
+    SCRIPT_BASE="$(basename "${SCRIPT_REL}")"
+    SCRIPT_STEM="${SCRIPT_BASE%.*}"
+
+    # ---- Runner and container: the same images as the pipeline's own steps --
+    case "${SCRIPT_BASE}" in
+        *.R|*.r) RUNNER="Rscript"; IMAGE="rocker/tidyverse:4.3" ;;
+        *.py)    RUNNER="python3"; IMAGE="quay.io/biocontainers/cutadapt:5.2--py39hbcbf7aa_0" ;;
+        *.sh)    RUNNER="bash";    IMAGE="rocker/tidyverse:4.3" ;;
+        *)
+            echo "ERROR: unsupported extension (use .R, .py or .sh)" >&2
+            exit 1 ;;
+    esac
+
+    # Nextflow's Apptainer cache (apptainer.cacheDir in conf/pmacs.config) stores
+    # each image as <image with / and : replaced by ->.img. If it is not there,
+    # the job pulls it once from docker:// into the same cache.
+    CACHE_DIR="/project/rephilllab/nf_containers"
+    IMG_STEM="$(printf '%s' "${IMAGE}" | tr '/:' '--')"
+    IMG_FILE=""
+    if [[ -f "${CACHE_DIR}/${IMG_STEM}.img" ]]; then
+        IMG_FILE="${CACHE_DIR}/${IMG_STEM}.img"
+    else
+        shopt -s nullglob
+        cached=( "${CACHE_DIR}"/*"${IMG_STEM}"* )
+        shopt -u nullglob
+        for cand in "${cached[@]}"; do
+            if [[ -f "${cand}" ]]; then
+                IMG_FILE="${cand}"
+                break
+            fi
+        done
+    fi
+    if [[ -n "${IMG_FILE}" ]]; then
+        IMG_REF="${IMG_FILE}"
+        IMG_NOTE="${IMG_FILE}"
+    else
+        IMG_REF="docker://${IMAGE}"
+        IMG_NOTE="not cached in ${CACHE_DIR}: pulling docker://${IMAGE} once into APPTAINER_CACHEDIR"
+    fi
+
+    # ---- Arguments for the script: quoted for the job, shown in the log ------
+    ARGS_Q=""
+    ARGS_LOG="(none)"
+    if [[ $# -gt 0 ]]; then
+        ARGS_Q="$(printf '%q ' "$@")"
+        ARGS_LOG="${ARGS_Q% }"
+    fi
+
+    MEM_MB=$(( 10#${SCRIPT_MEM} * 1000 ))
+    TS="$(date +%Y%m%d_%H%M%S)"
+    LOG_DIR="${PROJECT_DIR}/metadata/script_logs"
+    LOG="${LOG_DIR}/${SCRIPT_STEM}_${TS}.log"
+    mkdir -p "${LOG_DIR}"
+
+    echo "Submitting script job to LSF (queue: rhel9)..."
+    echo "  Script   : ${PROJECT_DIR}/${SCRIPT_REL}"
+    echo "  Resources: ${SCRIPT_CPUS} cores, ${SCRIPT_MEM} GB, ${SCRIPT_TIME} h"
+    echo "  Image    : ${IMG_NOTE}"
+
+    bsub_out="$(bsub <<EOF
+#BSUB -J "${PIPELINE_NAME}_script_${SCRIPT_STEM}_${TS}"
+#BSUB -q rhel9
+#BSUB -oo "${LOG%.log}.lsf.out"
+#BSUB -eo "${LOG%.log}.lsf.err"
+#BSUB -n ${SCRIPT_CPUS}
+#BSUB -M ${MEM_MB}
+#BSUB -R "rusage[mem=${MEM_MB}]"
+#BSUB -W ${SCRIPT_TIME}
+
+cd "${PROJECT_DIR}"
+mkdir -p metadata/script_logs
+export APPTAINER_CACHEDIR="${CACHE_DIR}"
+export CRISPR_MAX_CPUS=${SCRIPT_CPUS}
+export CRISPR_MAX_MEMORY_MB=${MEM_MB}
+{
+echo "CRISPR_SCREEN script run (cluster)"
+echo "date      : \$(date)"
+echo "project   : ${PROJECT_DIR}"
+echo "script    : ${SCRIPT_REL}"
+echo "md5       : \$(md5sum "${SCRIPT_REL}" | awk '{print \$1}')"
+echo "args      : ${ARGS_LOG}"
+echo "container : ${IMAGE}"
+echo "image file: ${IMG_NOTE}"
+echo "resources : ${SCRIPT_CPUS} cores, ${SCRIPT_MEM} GB, ${SCRIPT_TIME} h"
+echo "LSF job   : \$LSB_JOBID"
+echo "host      : \$(hostname)"
+echo ""
+echo "------------------------------------------------------------"
+} >> "${LOG}"
+apptainer exec -B /usr/lib64/ossl-modules --bind "${PROJECT_DIR}" --pwd "${PROJECT_DIR}" "${IMG_REF}" ${RUNNER} "${SCRIPT_REL}" ${ARGS_Q} >> "${LOG}" 2>&1
+script_rc=\$?
+printf '\n-- exit code %s --\n' "\$script_rc" >> "${LOG}"
+exit \$script_rc
+EOF
+)"
+    echo "${bsub_out}"
+    job_id="$(printf '%s\n' "${bsub_out}" | sed -n 's/^Job <\([0-9]*\)>.*/\1/p' | head -1)"
+    if [[ -z "${job_id}" ]]; then
+        echo "ERROR: could not read the job id from bsub's output (see above)." >&2
+        exit 1
+    fi
+
+    echo ""
+    echo "Submitted job ${job_id}."
+    echo "  Log      : ${LOG}"
+    echo "  LSF logs : ${LOG%.log}.lsf.out / ${LOG%.log}.lsf.err"
+    echo "Follow it with:"
+    echo "  tail -f ${LOG}"
+    echo "  bjobs ${job_id}"
+    echo "  bpeek ${job_id}"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
 # Run — everything below here submits real compute jobs.
 # ---------------------------------------------------------------------------
 CONFIG_FILE="${1:-config.yaml}"
@@ -194,6 +389,12 @@ KEEP_WORK="$(yaml_get "keep_work" | tr 'A-Z' 'a-z' || true)"
 case "${KEEP_WORK}" in true|yes) KEEP_WORK=true ;; *) KEEP_WORK=false ;; esac
 # results/ only stays valid without work/ when steps publish copies (the default).
 case "$(yaml_get "publish_mode" | tr -d "\"'" || true)" in symlink|rellink) KEEP_WORK=true ;; esac
+# publish_mode: auto is the Docker versions' value; on the cluster it means copy
+# (results/ stays standalone, as with the default). Any other value passes nothing.
+EXTRA_ARGS=""
+if [[ "$(yaml_get "publish_mode" | tr -d "\"'" || true)" == "auto" ]]; then
+    EXTRA_ARGS="--publish_mode copy "
+fi
 
 # ---- Raw FASTQ paths: check them where they are, never move or copy them ---
 # The raw FASTQs stay where the user keeps them, and config.yaml is only read,
@@ -320,7 +521,7 @@ cd "${PROJECT_DIR}"
 mkdir -p metadata
 export NXF_WORK="${NXF_WORK}"
 export NXF_ANSI_LOG=false
-"${NXF_BIN}" -log metadata/.nextflow.log run "${PIPELINE_DIR}" -profile pmacs -params-file "${CONFIG_FILE}" -resume ${FASTQ_ARGS}
+"${NXF_BIN}" -log metadata/.nextflow.log run "${PIPELINE_DIR}" -profile pmacs -params-file "${CONFIG_FILE}" -resume ${FASTQ_ARGS}${EXTRA_ARGS}
 nf_rc=\$?
 # Success + keep_work false: free the disk (publish_mode is 'copy', so results/ does not point into work/)
 # The guard needs two components below nf_work (.../nf_work/<user>/<project>), so it can never match nf_work or the user folder.

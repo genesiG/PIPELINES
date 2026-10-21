@@ -76,6 +76,9 @@ own additions belong under its own `/project` space.
    `utils/.pipeline_defaults.md5`, so a later edit to the copy can be detected)
    and the agent definitions `agent/.claude/` into `.claude/` (only files that
    don't exist yet). `utils/` and `.claude/` go into the initial git commit.
+   If an AI agent is helping you, it should read the new project's `CLAUDE.md`
+   and `AGENTS.md` right after `init` and follow them from then on. For later
+   sessions, start Claude Code inside the project folder so it loads them.
 2. Copy the example CSVs you need from `examples/` into the project root
    (next to `config.yaml`) and fill in your real data:
    - **`samplesheet.csv`** — one row per sample: `barcode_id,barcode,sample_name`
@@ -105,7 +108,12 @@ own additions belong under its own `/project` space.
    bjobs -u $USER
    tail -f metadata/nf_logs/nextflow_<timestamp>.out
    ```
-6. Results land in `./results/` (see layout below). Nextflow's own
+6. Results land in `./results/` (see layout below). Every plot is saved as an
+   SVG and as a PNG (same name, ~150 dpi) next to it: per-library plots in
+   `results/counts/qc/plots/`, the barcode-position plot in
+   `results/demultiplexing/qc/demux_plots/`, and, with more than one library, the
+   pool-vs-pool comparison plots in `results/counts/qc/plots/pools_comparison/`
+   (`<project>_pools_<name>.svg/.png`). Nextflow's own
    `metadata/pipeline_info/execution_report.html` — per-task runtime, memory,
    and success/failure — is useful for troubleshooting or just seeing what ran.
 
@@ -120,7 +128,8 @@ always keep both, so a re-run resumes.
 Re-running a finished project recomputes everything (~10-20 min for a full lane);
 to resume only what changed (e.g. after adding contrasts), set `keep_work: true`
 before the run. This is safe: `results/` holds copies, not links into the work
-folder. Intermediate files are in `results/intermediate_files/`.
+folder (`publish_mode` is `copy`; `auto` is also accepted and means copy on the
+cluster). Intermediate files are in `results/intermediate_files/`.
 
 ## Where the raw FASTQ lives
 
@@ -229,9 +238,13 @@ cp /project/rephilllab/CRISPR_SCREEN/HPC/bin/plot_barcode_position.R utils/
 # 2. edit utils/plot_barcode_position.R (add a plot, change colors, ...)
 # 3. in config.yaml:
 #      plot_barcode_position: utils/plot_barcode_position.R
-# 4. re-run: only that step (and anything downstream) re-executes
+# 4. re-run: that step (and anything downstream) re-executes
 run_crisprscreen.sh
 ```
+
+Note that on the cluster the work folder is deleted after a successful run (see
+above), so a re-run only reuses the earlier steps if `keep_work: true` was set
+before that run; otherwise the whole pipeline recomputes.
 
 | Script in `bin/` (= `config.yaml` key) | Step                                                                                                                                              |
 | ----------------------------------------| ---------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -263,18 +276,49 @@ the same files. A replacement may be in another language: `.py` runs with
 To keep the default script but pass it extra arguments, add
 `<script name>_args`, e.g. `plot_barcode_position_args: "--bw=1"` or
 `mageck_count_args: "--count-n"`. The `.sh` scripts hand extra arguments to
-their tool (cutadapt, fastqc, multiqc, mageck).
+their tool (cutadapt, fastqc, multiqc, mageck). Changing a `<script>_args`
+value in `config.yaml` re-runs that step.
 
 Every plotting step is split from its computation: the plot step reads only
 the tables the computation step wrote. So changing a plot script, the
-theme, or a plot's `_args` re-runs **only** the plot step — no recounting,
-no recomputing statistics.
+theme, or a plot's `_args` re-runs only the plot step (and the report built
+from it), with no recounting and no recomputing of statistics, provided the
+earlier steps are still cached (`keep_work: true` was set for the previous
+run). The plots are drawn in `guide_representation_plot.R` (per-library plots;
+`--dpi` sets the PNG resolution, default 150), `guide_representation_compare_report.R`
+(the pools comparison plots, drawn inside the report script) and
+`plot_barcode_position.R`; `my_theme.R` is the shared look.
 
 Replacements are just files, so they're picked up by your project's git repo
 along with `config.yaml`. A custom plotting script can write extra plots —
 the step publishes everything it produces. A replacement path that doesn't
 exist, or a script path under a key that isn't a script name (a typo), stops
 the run at startup with a message.
+
+## Running your own analysis script (beyond the pipeline)
+
+*New, not yet tested on the cluster.* For analysis the pipeline doesn't do, write
+a script in your project's `utils/` and run it as one LSF job (never on the login
+node):
+
+```bash
+run_crisprscreen.sh script [--cpus N] [--mem GB] [--time HH:MM] utils/<name>.<R|py|sh> [args...]
+```
+
+- Defaults: 1 core, 8 GB, 4 h. The launcher prints the job ID and the
+  `tail -f`, `bjobs` and `bpeek` commands to follow it.
+- The script must be inside the project folder. `.R` runs with Rscript, `.py`
+  with python3, `.sh` with bash, in the project root, so it can read
+  `results/...` and should write to its own `results/<name>/` folder (a
+  convention, not enforced; don't write into the pipeline's own result folders).
+- Containers: `rocker/tidyverse:4.3` for `.R` and `.sh` (R 4.3 + tidyverse; no
+  Bioconductor) and the cutadapt biocontainer for `.py` (Python standard library
+  plus cutadapt's dependencies only). A lab image with more tools (Bioconductor,
+  samtools, deepTools, ...) is planned.
+- Log: `metadata/script_logs/<script>_<YYYYMMDD_HHMMSS>.log`, with a header (date,
+  project, script, md5, arguments, image, image ID, CPU/memory budget, working
+  directory) and a last line `-- exit code N --`. The LSF output
+  (`.lsf.out`, `.lsf.err`) is written next to it.
 
 ## Directory convention
 
@@ -295,11 +339,13 @@ future RNA-seq/CUT&RUN/etc. pipelines) — not a CRISPR-screen-specific choice:
 │                         fastq_r1/fastq_r2/fastq_dir point to where they are kept)
 ├── metadata/             pipeline-generated run bookkeeping: nf_logs/ (LSF head-job
 │                         logs), .nextflow.log, pipeline_info/ (execution report/
-│                         trace/timeline/DAG) — NOT this pipeline's own inputs (see
+│                         trace/timeline/DAG), script_logs/ (logs of `script` runs) — NOT this pipeline's own inputs (see
 │                         above); kept here for consistency with pipelines that do
 │                         populate metadata/ with their own generated metadata
 ├── utils/                your project's replacements for pipeline scripts (see "Customizing")
-├── results/              final outputs, one subfolder per pipeline step (below)
+│                          and your own analysis scripts (see "Running your own analysis script")
+├── results/              final outputs, one subfolder per pipeline step (below),
+│                          plus one subfolder per analysis script you run (results/<name>/)
 │   └── intermediate_files/  tool-format conversions (e.g. the MAGeCK library file)
 └── examples/             starter CSVs fetched by `init`, for reference
 ```

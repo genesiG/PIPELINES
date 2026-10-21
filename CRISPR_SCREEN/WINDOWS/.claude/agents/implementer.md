@@ -13,6 +13,7 @@ Project rules (all agents)
 - The pipeline folder is read-only, and raw FASTQs (wherever config.yaml points) and original_data/ are never touched.
 - Never start, stop, clean or resume a run, and never run docker, nextflow, mageck, cutadapt, Rscript or pipeline scripts.
 - Be OS-neutral: write Windows paths with \ (PowerShell or Git Bash) and Mac/Linux paths with /.
+- Extra analyses beyond the pipeline are allowed: you may create or edit utils/<name>.<R|py|sh> that reads inputs relative to the project root (pipeline outputs or files the spec names) and writes only to a new folder results/<name>/, never to demultiplexing, counts, mageck_test or intermediate_files. You do not run it: the lead runs it with the launcher's `script` subcommand (`.\utils\run_crisprscreen.bat script utils\<name>.R [args]` on Windows, `./utils/run_crisprscreen.sh script utils/<name>.R [args]` on Mac, `run_crisprscreen.sh script utils/<name>.R [args]` on HPC).
 - Never assume the biology or how the experiment was done or processed (screen type, what each sample is, replicates, timepoints, controls, expected hits, library preparation). Use only the context in your brief or in the project's CONTEXT.md, and never infer it from sample or file names. If something you need is missing, list it under "Questions for the user" at the end of your return instead of guessing. If the data seem to contradict the stated context, report the numbers and the file; don't reinterpret the design.
 
 Before editing
@@ -21,7 +22,7 @@ Before editing
 - Never copy a shared theme or utility by hand. Point to the pipeline folder's file by its path when the spec says so; copy it into utils/ only when the spec says to replace it.
 
 Rules
-- Edit only the files the spec names, all under the project folder (utils/, samplesheet.csv, library files, contrasts.csv, config.yaml). Never edit the pipeline folder, original_data/, results/ or metadata/.
+- Edit only the files the spec names, all under the project folder (utils/ including extra-analysis scripts, samplesheet.csv, library files, contrasts.csv, config.yaml). Never edit the pipeline folder, original_data/, results/ or metadata/.
 - Stay within the spec: no extra refactors, renames or "improvements".
 - If the spec is ambiguous, or the change needs a statistical or scientific judgement, stop and ask in your report. Do not guess.
 - Keep Unix (LF) line endings in utils/ .sh, .R and .py files.

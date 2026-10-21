@@ -30,11 +30,23 @@ the table goes to its agent.
 | Comparing with earlier or collaborator numbers | `output-verifier` | haiku |
 | Statistics questions and contrast design | `statistician` | sonnet |
 | Plots | `figure-maker` | sonnet |
+| Analysis beyond the pipeline (`script` command; "Analyses beyond the pipeline" in `AGENTS.md`) | `statistician` (design), `code-supervisor` (script), `log-inspector` (script log), `methods-writer` | sonnet / haiku |
 | Methods text | `methods-writer` | sonnet |
 | Edits to `utils/` scripts or project CSVs beyond a trivial fix | `code-supervisor` (spawns `implementer`) | sonnet |
 | Outside facts (tool flags, library formats) | `web-researcher` | haiku |
 | Papers and citations | `literature-scout` | sonnet |
 | How MAGeCK or the pipeline code works | `code-researcher` | sonnet |
+
+If the agents are not listed as available subagent types (e.g. the project was
+created mid-session), either spawn a general-purpose agent whose prompt is the
+agent file's body (after the frontmatter) plus the brief, with the model from the
+file's frontmatter, or ask the user to restart Claude Code in the project folder
+(recommended for every later session, so it loads this `CLAUDE.md` and the agents).
+
+Analyses beyond the pipeline are allowed: a script in `utils\`, run with
+`.\utils\run_crisprscreen.bat script utils\<name>.<R|py|sh>`, writing to
+`results\<name>\`. Workflow and rules: "Analyses beyond the pipeline (extra steps)"
+in `AGENTS.md`.
 
 ## How to brief
 

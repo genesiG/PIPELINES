@@ -27,7 +27,7 @@
  * already positioned at the guide), params.trim5 unchanged when a project
  * set it explicitly to bypass anchor discovery.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process MAGECK_COUNT {
     tag "${lib_name}"
@@ -71,7 +71,7 @@ process MAGECK_COUNT {
         --sgrna-len ${params.sgrna_len} \\
         --trim5     ${trim5} \\
         ${drop_zero ? '--drop-zero-samples' : ''} \\
-        ${extraArgs('mageck_count')}
+        ${params.mageck_count_args ?: ''}
     """
 
     stub:

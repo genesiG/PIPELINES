@@ -8,7 +8,7 @@
  * so this picks up whatever the script writes — a custom script that makes
  * extra plots gets those published too, with no module change.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process PLOT_BARCODE_POSITION {
     tag "${params.project_name}"
@@ -44,11 +44,12 @@ process PLOT_BARCODE_POSITION {
         --project="${params.project_name}" \\
         --theme="${theme}" \\
         --outdir=. \\
-        ${extraArgs('plot_barcode_position')}
+        ${params.plot_barcode_position_args ?: ''}
     """
 
     stub:
     """
     touch "${params.project_name}_barcode_position_density.svg"
+    touch "${params.project_name}_barcode_position_density.png"
     """
 }

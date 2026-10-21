@@ -7,11 +7,11 @@
 #   raw FASTQ(s)                 not copied into the project: they stay where they are,
 #                                fastq_r1/fastq_r2 (or fastq_dir) point to them (see below)
 #   original_data/fastq/        per-sample FASTQs (demux output)
-#   metadata/                   run logs (nf_logs/), Nextflow reports, failed_tasks/
+#   metadata/                   run logs (nf_logs/), Nextflow reports, failed_tasks/, work/, .nextflow/ (resume state)
 #   results/<step>/             final outputs, one subfolder per pipeline step
 #     intermediate_files/       under results/: tool-format conversions (e.g. MAGeCK library file, anchor-trimmed FASTQs)
-#   work/                       Nextflow's working files (lets a re-run resume); deleted after a
-#                               successful run (with Nextflow's .nextflow/ cache) unless keep_work: true
+#   metadata/work/              Nextflow's working files (lets a re-run resume), and metadata/.nextflow/
+#                               (its resume cache): kept by default, so a re-run resumes, unless keep_work: false
 
 # Prefix used for every output file (e.g. "AV_CELL_DEATH_SCREEN"; letters, digits, _ and - only)
 project_name: my_screen
@@ -118,7 +118,11 @@ plot_barcode_position: utils/plot_barcode_position.R
 original_data_dir: ./original_data
 intermediate_dir: ./results/intermediate_files
 outdir: ./results
-# false = delete work/ and .nextflow/ after a successful run to free disk space; the next run then recomputes
-# every step instead of resuming. true = keep it (resume only re-runs what changed, e.g. after
-# adding contrasts). Failed or stopped runs always keep it, so a re-run resumes.
-keep_work: false
+# true (default) = keep metadata/work and metadata/.nextflow after a successful run: the next run only
+# re-runs what changed (resume), at the cost of disk space (hard links keep published results from
+# being stored twice). false = delete them after a successful run to free disk space; the next run
+# then recomputes every step. Failed or stopped runs always keep them.
+keep_work: true
+# publish_mode: auto   # auto (default) = hard links from metadata/work when the disk allows (no big file
+#                      # stored twice), else copies; or copy / link. symlink/rellink are not recommended
+#                      # (results/ would point into metadata/work).

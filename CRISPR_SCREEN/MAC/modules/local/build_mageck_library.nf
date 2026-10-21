@@ -3,7 +3,7 @@
  * <sgRNA_id  sequence  gene> format `mageck count --list-seq` expects.
  * Ported from step_2_count.py's _build_mageck_library().
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process BUILD_MAGECK_LIBRARY {
     tag "${lib_name}"
@@ -25,7 +25,7 @@ process BUILD_MAGECK_LIBRARY {
     ${runner(helper_script)} "${helper_script}" \\
         --input "${library_csv}" \\
         --output "${lib_name}_mageck_library.txt" \\
-        ${extraArgs('build_mageck_library')}
+        ${params.build_mageck_library_args ?: ''}
     """
 
     stub:

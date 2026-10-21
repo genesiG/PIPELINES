@@ -312,6 +312,14 @@ def prepareRun() {
     if (!params.library)     missing << 'library'
     if (missing) fail("missing required param(s): ${missing.join(', ')} (set in your config.yaml).")
 
+    // publish_mode: 'auto' is resolved by run_crisprscreen (see nextflow.config).
+    def publishModes = ['copy', 'link', 'symlink', 'rellink', 'move', 'copyNoFollow']
+    if (params.publish_mode == 'auto') {
+        fail("publish_mode 'auto' is resolved by run_crisprscreen (docker/run_in_container.sh passes --publish_mode link or copy); when running Nextflow by hand pass --publish_mode copy")
+    } else if (!(params.publish_mode in publishModes)) {
+        fail("publish_mode '${params.publish_mode}' is not one of: ${publishModes.join(', ')}")
+    }
+
     // fastq_dir set = already demultiplexed; fastq_r1/fastq_r2 are then ignored.
     def alreadyDemuxed = params.fastq_dir as boolean
     if (!params.fastq_r1 && !params.fastq_dir) {

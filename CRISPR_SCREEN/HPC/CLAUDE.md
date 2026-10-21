@@ -10,6 +10,25 @@ here when the user explicitly asks to change it for everyone.
 - **Personal computers** (Windows or Mac) use the Docker versions, which are
   separate folders of the full repository (`WINDOWS/`, `MAC/`), not this one.
 
+## After `init`: switch to the project's instructions
+
+Users usually ask you to set up a project before running it, so the project's `.claude/agents/`,
+`CLAUDE.md` and `AGENTS.md` are created mid-session by `run_crisprscreen.sh init`. Immediately
+after `init`, read the new project's `CLAUDE.md` and `AGENTS.md` and follow them from then on
+(delegation table and triggers included). If Claude Code was started in this pipeline folder,
+its `.claude/agents` is the same kit, so the agents are available now. If they are not listed
+as available subagent types, either spawn a general-purpose agent whose prompt is the agent
+file's body (after the frontmatter) plus the brief, with the model from the file's
+frontmatter, or ask the user to restart Claude Code in the project folder (recommended for
+every later session, so it loads that project's `CLAUDE.md` and agents).
+
+## Analyses beyond the pipeline
+
+Custom analysis for a project is allowed: a script `utils/<name>.<R|py|sh>` in the project that
+writes to a new `results/<name>/`, run with `run_crisprscreen.sh script utils/<name>.R` (an LSF
+job; new, not yet tested on the cluster). The project's `AGENTS.md` has the workflow and the
+rules. The pipeline's own steps are still only run with the launcher's `run`.
+
 ## Ask about the experiment; never assume it
 
 Never assume the biology or how the experiment was done or processed (screen
@@ -49,7 +68,7 @@ run_crisprscreen and commits. Every task in the table goes to its agent.
 - Preparing messy inputs: `input-preparer`.
 - After every run, success or failure: `log-inspector`, then `results-reporter`
   on success.
-- Any statistics question: `statistician`.
+- Any statistics question, and the design of any analysis beyond the pipeline: `statistician`.
 - Any change to the pipeline: `code-supervisor`.
 - Any cluster error you do not recognise: `log-inspector` on the run first, then
   `web-researcher` (outside facts) or `code-researcher` (pipeline code).

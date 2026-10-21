@@ -48,6 +48,17 @@ this one — read it before starting a new port.
   `agent/AGENTS.md` and the README's "Customizing" section), not here.
 - If you're helping with a **project** (a directory with `config.yaml`,
   `samplesheet.csv`, `results/`), follow that project's `AGENTS.md` instead.
+  Immediately after `run_crisprscreen.sh init` (the step that creates the project
+  folder), read the new project's `CLAUDE.md` and `AGENTS.md` and follow them from
+  then on, delegation table and triggers included. If its agents are not listed
+  as subagent types, use the fallback in `CLAUDE.md` ("After `init`").
+- Analyses beyond the pipeline are allowed for a project: a script
+  `utils/<name>.<R|py|sh>` writing to a new `results/<name>/`, run with
+  `run_crisprscreen.sh script utils/<name>.R` (one LSF job, log in
+  `metadata/script_logs/`; new, not yet tested on the cluster). The workflow and
+  rules are in `agent/AGENTS.md`. The pipeline's own steps are still only run
+  with the launcher's `run`; don't call `nextflow`, `mageck`, `cutadapt` or
+  `apptainer` directly except for the validation steps below.
 - Changes here affect everyone's next run. Changing a module's inputs or
   script invalidates that step's cache for every project, so it re-runs once.
   Say so when you report a change.
@@ -61,7 +72,7 @@ nextflow.config        params (defaults), profiles, provenance reports -> metada
 conf/base.config       per-process resources, retry policy, shell = bash -euo pipefail
 conf/pmacs.config      LSF executor + Apptainer (incl. the FIPS bind mount) + shared container cache
 conf/test.config       small resources for smoke tests;  conf/conda.config: unused fallback
-modules/local/*.nf     one process per step; functions.nf: runner() / extraArgs() shared by all of them
+modules/local/*.nf     one process per step; functions.nf: runner() shared by all of them
 bin/                   every step's script (.sh wrappers around the tools, Python/R helpers) + my_theme.R
 examples/              files `init` copies into a project (config.yaml template, *_example.csv, project.gitignore)
 agent/                 AGENTS.md / CLAUDE.md, and .claude/ (agent definitions), that `init` copies into every project; init also copies bin/plot_barcode_position.R to utils/ (if absent)
@@ -77,8 +88,13 @@ test/                  make_test_project.py + README.md: a small synthetic scree
   replaces a script with a `config.yaml` key named after it (file name without
   extension); `stepScripts()` in `main.nf` builds that mapping from whatever is
   in `bin/`, so a new script is replaceable with no param declaration. Modules
-  call it as `${runner(script)} "${script}" ... ${extraArgs('<name>')}` (from
-  `modules/local/functions.nf`). A script's header must document the
+  call it as `${runner(script)} "${script}" ... ${params.<name>_args ?: ''}`
+  (`runner()` is in `modules/local/functions.nf`). A step's extra arguments
+  must be referenced as `params.<name>_args` directly in the script block and
+  declared (as null) in `nextflow.config`: Nextflow only hashes global
+  variables referenced directly in the script block, so a function reading
+  params dynamically is invisible to the cache and changing the key would not
+  re-run the step. A script's header must document the
   arguments it receives and the files it must write, since that's the contract
   a replacement has to meet. `.sh` scripts pass unrecognized arguments on to
   their tool. A new script needs a row in the README's customization table
@@ -102,7 +118,12 @@ test/                  make_test_project.py + README.md: a small synthetic scree
 - **Plot scripts** take `--key=value` args and `--theme=<file>` (defining
   `my_theme`). They fall back to `my_theme.R` next to themselves via
   Rscript's `--file=` argument. Write SVG with base `svg()`; `ggsave(device =
-  "svg")` needs svglite, which `rocker/tidyverse:4.3` lacks.
+  "svg")` needs svglite, which `rocker/tidyverse:4.3` lacks. Every plot also
+  has a PNG twin (same base name, ~150 dpi). Plots are drawn in
+  `guide_representation_plot.R` (per-library; `--dpi` works, default 150),
+  `guide_representation_compare_report.R` (the pools comparison plots, in
+  `results/counts/qc/plots/pools_comparison/`) and `plot_barcode_position.R`;
+  `my_theme.R` is the shared theme.
 - **Every process publishes its own exact command as `command.sh`**, next to
   its `.log` file, so a labmate or agent can see precisely what ran without
   digging into Nextflow's ephemeral `work/` dirs — this is what the legacy
@@ -255,8 +276,11 @@ test/                  make_test_project.py + README.md: a small synthetic scree
   The head job deletes the work folder and Nextflow's `.nextflow/` cache after a
   successful run unless `config.yaml` has `keep_work: true` (default `false`); failed
   or stopped runs keep both, so a re-run resumes. Re-running a finished project recomputes
-  everything (~10-20 min for a full lane). `publish_mode` is `copy`, so nothing
-  in `results/` points into the work dir and the cleanup is safe.
+  everything (~10-20 min for a full lane). `publish_mode` is `copy` (`auto` is
+  accepted and means copy here), so nothing in `results/` points into the work
+  dir and the cleanup is safe. The Windows/Mac Docker versions differ (work in
+  `metadata/work`, `keep_work` default true, hard links). `run_crisprscreen.sh
+  script` runs are logged in `metadata/script_logs/`.
   Session-scoped `/tmp` paths are not visible from compute nodes, so test
   inputs must live on GPFS (`/home`, `/project`).
 
@@ -307,7 +331,8 @@ user asks for a full run.
    to the pre-Nextflow pipeline.
 
 Never run Nextflow tasks, analysis scripts, or anything memory-heavy directly
-on the login node (~2 GB cap).
+on the login node (~2 GB cap); run a script as a job with `run_crisprscreen.sh
+script` (project scripts) or `bsub` (the validation steps above).
 
 ## Git
 

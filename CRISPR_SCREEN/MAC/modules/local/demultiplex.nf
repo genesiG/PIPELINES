@@ -8,7 +8,7 @@
  * The script runs cutadapt with --cores 0 (every core Docker gives it);
  * conf/base.config reserves all of them for this task.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process DEMULTIPLEX_SE {
     tag "${params.project_name}"
@@ -43,7 +43,7 @@ process DEMULTIPLEX_SE {
         --overlap ${barcode_len} \\
         --position-script "${qc_script}" \\
         --project "${params.project_name}" \\
-        ${extraArgs('demultiplex')}
+        ${params.demultiplex_args ?: ''}
     """
 
     stub:
@@ -84,7 +84,7 @@ process DEMULTIPLEX_PE {
         --overlap ${barcode_len} \\
         --position-script "${qc_script}" \\
         --project "${params.project_name}" \\
-        ${extraArgs('demultiplex')}
+        ${params.demultiplex_args ?: ''}
     """
 
     stub:

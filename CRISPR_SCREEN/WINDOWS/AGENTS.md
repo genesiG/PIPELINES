@@ -43,7 +43,8 @@ cmd.exe //c "D:\\path\\to\\CRISPR_SCREEN\\WINDOWS\\run_crisprscreen.bat" status
 | `run_crisprscreen.bat status` (in the project folder) | running / succeeded / failed, per-step counts, failed step, last log lines |
 | `run_crisprscreen.bat logs` | follow the live log (blocks until the run ends — avoid in an agent; use `status`) |
 | `run_crisprscreen.bat stop` | stop a run (finished steps are kept; the next run resumes) |
-| `run_crisprscreen.bat clean --yes` | delete `work\` (resume cache) now — rarely needed: it is deleted after a successful run unless `keep_work: true`; needed after failed runs or with `keep_work: true` — ask the user first |
+| `run_crisprscreen.bat clean --yes` | delete `metadata\work\` and `metadata\.nextflow\` (Nextflow's work folder and resume cache; also any legacy root `work\` / `.nextflow\`) to free disk — the next run starts from scratch, results are kept; without `--yes` it asks first; ask the user first |
+| `run_crisprscreen.bat script utils\<name>.<R\|py\|sh> [args]` (in the project folder) | run the project's own analysis script in the pipeline's image (foreground; log in `metadata\script_logs\`); see "Analyses beyond the pipeline" in the project's `AGENTS.md` |
 
 Every project folder also gets its own launcher, `utils\run_crisprscreen.bat`
 (same commands, always for that folder; agents run `.\utils\run_crisprscreen.bat`
@@ -176,6 +177,18 @@ repository to whatever is there). Then:
 & "<this folder>\run_crisprscreen.bat" init "$env:USERPROFILE\Documents\CRISPR_screens\<screen_name>"
 ```
 
+Immediately after `init`, **read the new project's `CLAUDE.md` and `AGENTS.md` and
+follow them from then on** (their delegation table and triggers included): users
+usually ask you to set the project up before running, so the project's
+`.claude\agents\` and instructions appear mid-session. If Claude Code was started
+in this pipeline folder, its `.claude\agents\` is the same kit, so the agents are
+available now. If they are not listed as available subagent types, either spawn a
+general-purpose agent whose prompt is the agent file's body (after the
+frontmatter) plus the brief, with the model from the file's frontmatter, or ask
+the user to restart Claude Code in the project folder (recommended for every
+later session: start Claude Code inside the project folder, so it loads that
+project's `CLAUDE.md` and agents).
+
 ### 4. Write the input tables (in the project folder)
 
 **`samplesheet.csv`** — one row per sample:
@@ -273,11 +286,21 @@ drive or network share. The computer must stay on and awake (plugged in, sleep
 disabled) — if it sleeps, the run pauses; if Docker restarts, just run again
 (it resumes).
 
-`work\` is deleted after a successful run unless `keep_work: true` (in
-`config.yaml`, default `false`); failed or stopped runs keep it. Re-running a
-finished project recomputes everything (about 10–20 min for a full lane); to
-resume only what changed (e.g. after adding contrasts), set `keep_work: true`
-before the run. Intermediate files are in `results\intermediate_files\`.
+Nextflow's work folder is `metadata\work\` and its resume cache
+`metadata\.nextflow\` (`metadata\` is git-ignored). They are kept by default
+(`keep_work: true` in `config.yaml`), so a re-run resumes and only redoes what
+changed (e.g. after adding contrasts, or a plot tweak: just the plot step and the
+report). With `keep_work: false` they are deleted after a successful run, and
+re-running then recomputes everything (about 10–20 min for a full lane); failed
+or stopped runs always keep them. Files in `results\` and `original_data\` are
+hard links to the files in `metadata\work\` when the disk allows
+(`publish_mode: auto`, the default; the run log banner says "publish mode: link
+..." or "copy ..."), so big FASTQs are not stored twice: never edit a published
+file in place (replacing or deleting is fine). To free disk space, `clean` (ask
+the user first) or `keep_work: false`. A `work\` or `.nextflow\` directly in the
+project folder is legacy from an older version: unused, never deleted
+automatically (`run`/`status` print a note; `clean` removes it).
+Intermediate files are in `results\intermediate_files\`.
 
 ### 7. Report results
 
@@ -309,6 +332,17 @@ missing file, unknown library name, typo in a key) are printed at the end of
 finished steps are reused. If it looks like a bug in the pipeline itself, tell
 the user and stop — don't patch this folder.
 
+### 9. Analyses beyond the pipeline
+
+The user may want a plot or test the pipeline doesn't do. That is allowed, through
+the project's `script` command: `.\utils\run_crisprscreen.bat script utils\<name>.<R|py|sh>`
+runs the script in the pipeline's image, and the log goes to
+`metadata\script_logs\`. The script lives in `utils\`, writes only to a new
+`results\<name>\` folder, and is designed, written, run and reviewed as described
+in "Analyses beyond the pipeline (extra steps)" in the project's `AGENTS.md`
+(`init` copies it there). Never run `Rscript`/`python` on the host for this
+without asking the user (that rule's Tier 2 is in the same section).
+
 ## Subagents
 
 The agent definitions are in `.claude\agents\` of this folder, so an agent working here has them.
@@ -323,14 +357,15 @@ changes (section B), `statistician` for statistics.
 1. **Don't edit this pipeline folder** for a user's analysis. Per-project
    changes go in the project (`config.yaml`, `utils\` script overrides — see
    the project's `AGENTS.md`).
-2. **Only start the pipeline with `run_crisprscreen`.** Don't run `docker run`,
-   `nextflow`, `mageck`, `cutadapt`, `Rscript`, or the `bin\` scripts yourself.
+2. **Only start the pipeline with the launcher's `run`**, and run the project's
+   own analysis scripts with its `script` command. Don't run `docker run`,
+   `nextflow`, `mageck`, `cutadapt`, or the `bin\` scripts yourself.
 3. **The raw FASTQs are the user's data.** They stay where the user keeps them
    (`fastq_r1`/`fastq_r2`/`fastq_dir` point to them). Never move, delete,
    modify or overwrite them, and don't change those keys unless the user asks;
    if the files are moved, update `config.yaml`.
-4. **Ask before** deleting anything (`results\`, `work\` via `clean`,
-   `.nextflow\`), installing software, editing `.wslconfig`, or renaming the
+4. **Ask before** deleting anything (`results\`, `metadata\work\` and
+   `metadata\.nextflow\` via `clean`), installing software, editing `.wslconfig`, or renaming the
    user's files.
 5. **Don't hand-edit `results\`**; it is regenerated. Intermediate files are
    inside it, in `results\intermediate_files\`.

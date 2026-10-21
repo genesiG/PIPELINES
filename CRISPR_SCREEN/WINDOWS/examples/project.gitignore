@@ -9,6 +9,7 @@ results/
 # pipeline-generated run bookkeeping (logs, pipeline_info/, failed_tasks/) — regenerable
 metadata/
 
+# older versions kept these at the project root (now inside metadata/); kept for old projects
 work/
 .nextflow/
 .nextflow.log*

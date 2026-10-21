@@ -1,4 +1,4 @@
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process FASTQC {
     tag "${fastq.simpleName}"
@@ -24,7 +24,7 @@ process FASTQC {
     ${runner(step_script)} "${step_script}" \\
         --fastq "${fastq}" \\
         --threads ${task.cpus} \\
-        ${extraArgs('fastqc')}
+        ${params.fastqc_args ?: ''}
     """
 
     stub:

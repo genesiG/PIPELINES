@@ -5,7 +5,7 @@
  * the one count table holding both sides; MAGECK_TEST then runs against that
  * table. Exits 3 on any problem (a data problem — not retried).
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process VALIDATE_CONTRASTS {
     tag "${params.project_name}"
@@ -30,7 +30,7 @@ process VALIDATE_CONTRASTS {
         --count-table ${count_tables} \\
         --contrasts "${contrasts_csv}" \\
         --output validated_contrasts.csv \\
-        ${extraArgs('validate_contrasts')}
+        ${params.validate_contrasts_args ?: ''}
     """
 
     stub:   // runs the real (stdlib-only) validation, so -stub-run exercises it too
@@ -39,6 +39,6 @@ process VALIDATE_CONTRASTS {
         --count-table ${count_tables} \\
         --contrasts "${contrasts_csv}" \\
         --output validated_contrasts.csv \\
-        ${extraArgs('validate_contrasts')}
+        ${params.validate_contrasts_args ?: ''}
     """
 }

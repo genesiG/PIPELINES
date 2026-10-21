@@ -10,7 +10,7 @@
  * DEMULTIPLEX or MAGECK_COUNT would change their scripts and re-run them
  * in every project, for a few seconds of `--version` calls.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process SOFTWARE_VERSIONS {
     tag "${image}"
@@ -31,7 +31,7 @@ process SOFTWARE_VERSIONS {
     ${runner(versions_script)} "${versions_script}" \\
         --image "${image}" \\
         --output "${safeName(image)}.versions.tsv" \\
-        ${extraArgs('software_versions')}
+        ${params.software_versions_args ?: ''}
     """
 
     stub:

@@ -13,7 +13,7 @@
  * a compute node, never the login node), so these few-second tasks don't
  * each wait in the LSF queue.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process SOFTWARE_VERSIONS {
     tag "${image}"
@@ -35,7 +35,7 @@ process SOFTWARE_VERSIONS {
     ${runner(versions_script)} "${versions_script}" \\
         --image "${image}" \\
         --output "${safeName(image)}.versions.tsv" \\
-        ${extraArgs('software_versions')}
+        ${params.software_versions_args ?: ''}
     """
 
     stub:

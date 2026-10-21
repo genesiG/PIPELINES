@@ -30,10 +30,27 @@ the table goes to its agent.
 | Statistics questions and contrast design | `statistician` | sonnet |
 | Plots | `figure-maker` | sonnet |
 | Methods text | `methods-writer` | sonnet |
-| Edits to `utils/` scripts or project CSVs beyond a trivial fix | `code-supervisor` (spawns `implementer`) | sonnet |
+| Edits to `utils/` scripts or project CSVs beyond a trivial fix, and new analysis scripts | `code-supervisor` (spawns `implementer`) | sonnet |
 | Outside facts (tool flags, library formats) | `web-researcher` | haiku |
 | Papers and citations | `literature-scout` | sonnet |
 | How MAGeCK or the pipeline code works | `code-researcher` | sonnet |
+
+If these agents are not listed as available subagent types (the project and its `.claude/agents/`
+were created mid-session by `init`), either spawn a general-purpose agent whose prompt is the agent
+file's body (after the frontmatter) plus the brief, with the model from the file's frontmatter, or
+ask the user to restart Claude Code in the project folder. Starting Claude Code inside the project
+folder is recommended for every later session.
+
+## Analyses beyond the pipeline
+
+Custom analysis is allowed, as a script `utils/<name>.<R|py|sh>` that writes to a new
+`results/<name>/` folder and is run by the lead with
+`run_crisprscreen.sh script utils/<name>.R` (an LSF job, never the login node; new, not yet
+tested on the cluster). Flow: ask the user (`CONTEXT.md`), `statistician` designs it,
+`code-supervisor` writes it, the lead runs it, `log-inspector` reads
+`metadata/script_logs/`, `results-reporter`/`figure-maker` review, `methods-writer` writes
+`results/<name>/METHODS.md`. Outside the pinned containers (conda) only with the user's explicit
+OK. Details: "Analyses beyond the pipeline (extra steps)" in `AGENTS.md`.
 
 ## How to brief
 

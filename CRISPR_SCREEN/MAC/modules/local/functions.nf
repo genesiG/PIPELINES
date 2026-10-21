@@ -8,9 +8,3 @@ def runner(script) {
     def n = script.name.toLowerCase()
     return n.endsWith('.py') ? 'python3' : n.endsWith('.r') ? 'Rscript' : 'bash'
 }
-
-// Extra arguments for a step's script: config.yaml `<script name>_args`.
-def extraArgs(String step) {
-    def key = "${step}_args".toString()
-    return params.containsKey(key) ? (params[key] ?: '') : ''
-}

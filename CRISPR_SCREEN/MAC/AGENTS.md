@@ -38,7 +38,8 @@ bash "/Users/<user>/CRISPR_SCREEN/MAC/run_crisprscreen.sh" status
 | `run_crisprscreen.sh status` (in the project folder) | running / succeeded / failed, per-step counts, failed step, last log lines |
 | `run_crisprscreen.sh logs` | follow the live log (blocks until the run ends — avoid in an agent; use `status`) |
 | `run_crisprscreen.sh stop` | stop a run (finished steps are kept; the next run resumes) |
-| `run_crisprscreen.sh clean --yes` | delete `work/` (resume cache) now — rarely needed: it is deleted after a successful run unless `keep_work: true`; needed after failed runs or with `keep_work: true` — ask the user first |
+| `run_crisprscreen.sh clean --yes` | delete `metadata/work/` and `metadata/.nextflow/` (resume cache; plus a legacy root `work/` and `.nextflow/` if present) now, to free disk space — the next run starts from scratch, results are kept; without `--yes` it asks first; ask the user first |
+| `run_crisprscreen.sh script utils/<name>.<R\|py\|sh> [args...]` (in the project folder) | run the project's own analysis script in the pipeline's software environment (Docker image, same limits as `run`), in the foreground; log in `metadata/script_logs/` — see the project's `AGENTS.md`, "Analyses beyond the pipeline" |
 
 Every project folder also gets its own launcher, `utils/run_crisprscreen.sh`
 (same commands, always for that folder; agents run `./utils/run_crisprscreen.sh`
@@ -173,6 +174,17 @@ whatever is there). Then:
 bash ".../MAC/run_crisprscreen.sh" init ~/Documents/CRISPR_screens/<screen_name>
 ```
 
+**Immediately after `init`, read the new project's `CLAUDE.md` and `AGENTS.md` and
+follow them from then on** (delegation table and triggers included). Users usually
+ask you to set up the project before running it, so the project's `.claude/agents`
+and `CLAUDE.md`/`AGENTS.md` are created in the middle of your session. If Claude Code
+was started in the pipeline folder, its `.claude/agents` is the same kit, so the agents
+are available now. If they are not listed as available subagent types, either spawn a
+general-purpose agent whose prompt is the agent file's body (after the frontmatter) plus
+the brief, with the model from the file's frontmatter, or ask the user to restart Claude
+Code in the project folder (recommended for every later session: start Claude Code inside
+the project folder, so it loads that project's `CLAUDE.md` and agents).
+
 ### 4. Write the input tables (in the project folder)
 
 **`samplesheet.csv`** — one row per sample:
@@ -269,11 +281,28 @@ under an hour. The Mac must stay on, plugged in, lid open: the launcher
 prevents idle sleep while the analysis runs (`caffeinate`), but closing the lid
 or a dead battery pauses it. If Docker restarts, just run again (it resumes).
 
-`work/` is deleted after a successful run unless `keep_work: true` (in
-`config.yaml`, default `false`); failed or stopped runs keep it. Re-running a
-finished project recomputes everything (about 10–20 min for a full lane); to
-resume only what changed (e.g. after adding contrasts), set `keep_work: true`
-before the run. Intermediate files are in `results/intermediate_files/`.
+Nextflow's working files are in `metadata/work/` and its resume cache in
+`metadata/.nextflow/` (`metadata/` is git-ignored). They are kept by default
+(`keep_work: true` in `config.yaml`), so a re-run resumes and only redoes what
+changed (e.g. after adding contrasts, or a plot tweak). With `keep_work: false`
+they are deleted after a successful run, and re-running recomputes everything
+(about 10–20 min for a full lane); failed or stopped runs always keep them.
+By default (`publish_mode: auto`) files in `results/` and `original_data/` are
+hard links to the files in `metadata/work/` when the disk allows, so big FASTQs
+are not stored twice: never edit a published file in place. A root `work/` or
+`.nextflow/` from an older version is legacy and unused (`run`/`status` print a
+note; `clean` removes it). To free space use `clean` (ask first). Intermediate
+files are in `results/intermediate_files/`.
+
+**Analyses beyond the pipeline.** If the user wants an analysis the pipeline doesn't
+do, it is allowed: the script goes in the project's `utils/<name>.<R|py|sh>`, writes
+only to a new `results/<name>/`, and is run with `./utils/run_crisprscreen.sh script
+utils/<name>.R` (pinned image, same memory limits, log in `metadata/script_logs/`).
+The workflow (context from the user, `statistician`, `code-supervisor`, run, `log-inspector`,
+reviewers, `methods-writer`), the image's software and the fallback of running on the host
+(only after asking the user) are in the project's `AGENTS.md`, "Analyses beyond the
+pipeline". Plots: replace the right script in the project's `utils/`, re-run (with
+`keep_work` true only the plot step and the report re-run), and review the PNG twins.
 
 ### 7. Report results
 
@@ -318,14 +347,15 @@ pipeline changes (section B), `statistician` for statistics.
 1. **Don't edit this pipeline folder** for a user's analysis. Per-project
    changes go in the project (`config.yaml`, `utils/` script overrides — see
    the project's `AGENTS.md`).
-2. **Only start the pipeline with `run_crisprscreen.sh`.** Don't run `docker run`,
-   `nextflow`, `mageck`, `cutadapt`, `Rscript`, or the `bin/` scripts yourself.
+2. **Start the pipeline only with `run_crisprscreen.sh run`; run a project's own
+   analysis scripts only with `run_crisprscreen.sh script`.** Don't run `docker run`,
+   `nextflow`, `mageck`, `cutadapt`, or the `bin/` scripts yourself.
 3. **The raw FASTQs are the user's data.** They stay where the user keeps them
    (`fastq_r1`/`fastq_r2`/`fastq_dir` point to them). Never move, delete,
    modify or overwrite them, and don't change those keys unless the user asks;
    if the files are moved, update `config.yaml`.
-4. **Ask before** deleting anything (`results/`, `work/` via `clean`,
-   `.nextflow/`), installing software, changing Docker Desktop's settings, or
+4. **Ask before** deleting anything (`results/`, `metadata/work/` and
+   `metadata/.nextflow/` via `clean`), installing software, changing Docker Desktop's settings, or
    renaming the user's files.
 5. **Don't hand-edit `results/`**; it is regenerated. Intermediate files are
    inside it, in `results/intermediate_files/`.
@@ -429,4 +459,4 @@ get right. How this one does it (copy the pattern):
 Commit each coherent change with a message that says what changed, why, and
 how it was validated. Shell scripts must stay executable (`git add
 --chmod=+x`) and keep LF line endings (`.gitattributes`); `.bat`/`.ps1` keep
-CRLF. Don't commit work dirs, `.nextflow*`, project folders or data.
+CRLF. Don't commit work dirs (`metadata/work/`), `.nextflow*`, project folders or data.

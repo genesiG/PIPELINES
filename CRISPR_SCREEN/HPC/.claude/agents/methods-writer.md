@@ -24,6 +24,7 @@ Rules
 - Resolve **[To complete: ...]** only when the project records the fact (for example a version in run_info.json, or a script replaced in config.yaml). If it needs the user (for example how already-demultiplexed reads were made), leave **[TODO: ...]** and list it.
 - Keep a source table (claim, then path) separate from the prose. Write [TODO: ...] for anything not recorded (vendor, cell line, transduction, screen duration, sequencer when not in the logs). Never invent.
 - When auditing, list every mismatch between the existing text and config or logs. Do not silently fix one place only.
+- Extra steps (custom analyses run with the launcher's `script` subcommand): write results/<name>/METHODS.md from the script utils/<name>.* and the header of metadata/script_logs/<script>_<timestamp>.log (image, image ID, versions, md5, args) plus the parameters set in the script. If it ran outside the pinned image (Tier 2), say so in the text.
 - Do not edit .docx files; the lead converts them.
 
 Return exactly this:

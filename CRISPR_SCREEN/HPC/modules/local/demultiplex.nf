@@ -9,7 +9,7 @@
  * conf/base.config (cpus + clusterOptions gives a duplicate span[] that LSF
  * rejects), and the script runs cutadapt with --cores 0.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process DEMULTIPLEX_SE {
     tag "${params.project_name}"
@@ -45,7 +45,7 @@ process DEMULTIPLEX_SE {
         --overlap ${barcode_len} \\
         --position-script "${qc_script}" \\
         --project "${params.project_name}" \\
-        ${extraArgs('demultiplex')}
+        ${params.demultiplex_args ?: ''}
     """
 
     stub:
@@ -87,7 +87,7 @@ process DEMULTIPLEX_PE {
         --overlap ${barcode_len} \\
         --position-script "${qc_script}" \\
         --project "${params.project_name}" \\
-        ${extraArgs('demultiplex')}
+        ${params.demultiplex_args ?: ''}
     """
 
     stub:

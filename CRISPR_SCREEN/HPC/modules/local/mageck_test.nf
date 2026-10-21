@@ -3,7 +3,7 @@
  * contrast, fanned out as independent LSF tasks, each against the count table
  * VALIDATE_CONTRASTS resolved it to (the library whose samples include both sides).
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process MAGECK_TEST {
     tag "${name}"
@@ -32,7 +32,7 @@ process MAGECK_TEST {
         --name "${name}" \\
         --treatment "${treat_cols}" \\
         --control "${control_cols}" \\
-        ${extraArgs('mageck_test')}
+        ${params.mageck_test_args ?: ''}
     """
 
     stub:

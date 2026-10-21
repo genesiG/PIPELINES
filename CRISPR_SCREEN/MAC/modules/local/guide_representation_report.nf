@@ -13,7 +13,7 @@
  * table to every per-library report, so a low mapping % can be told apart
  * from reads that belong to another library. Otherwise no breakdown is passed.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process GUIDE_REPRESENTATION_REPORT {
     tag "${prefix}"
@@ -31,7 +31,7 @@ process GUIDE_REPRESENTATION_REPORT {
     publishDir "${params.outdir}/counts/qc/report/log", mode: params.publish_mode, pattern: "command.sh", saveAs: { "${prefix}_command.sh" }
 
     input:
-    tuple val(prefix), path(tables), path(plots)   // tables/*.csv (WRANGLE) + plots/*.svg (PLOT), staged flat
+    tuple val(prefix), path(tables), path(plots)   // tables/*.csv (WRANGLE) + plots/*.svg and *.png (PLOT; the report embeds only the SVGs), staged flat
     path breakdown_wide   // wide library-breakdown table in all-vs-all runs, or an empty list [] otherwise
     path report_script   // bin/guide_representation_report.R, or the project's `guide_representation_report:` replacement
 
@@ -50,7 +50,7 @@ process GUIDE_REPRESENTATION_REPORT {
         --prefix="${prefix}" \\
         --project="${params.project_name}" \\
         --outdir=. ${breakdown_arg} \\
-        ${extraArgs('guide_representation_report')}
+        ${params.guide_representation_report_args ?: ''}
     """
 
     stub:

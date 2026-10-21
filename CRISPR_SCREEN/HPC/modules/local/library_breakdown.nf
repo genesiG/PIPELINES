@@ -13,7 +13,7 @@
  * are published next to the guide-representation tables and are picked up by
  * GUIDE_REPRESENTATION_COMPARE_REPORT.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process LIBRARY_BREAKDOWN {
     tag "${params.project_name}"
@@ -43,7 +43,7 @@ process LIBRARY_BREAKDOWN {
         --samples="${sample_names}" \\
         --project="${params.project_name}" \\
         --outdir=. \\
-        ${extraArgs('library_breakdown')}
+        ${params.library_breakdown_args ?: ''}
     """
 
     stub:

@@ -31,7 +31,8 @@
 #'   --outdir      where to write the report (default: current directory)
 #'
 #' OUTPUT: <project>_pools_comparison_qc_report.html (self-contained — every
-#' plot is embedded inline as SVG).
+#' plot is embedded inline as SVG). Besides the HTML, each plot is also saved
+#' as SVG + PNG under <outdir>/pools_comparison/.
 #' ##########################################################################
 
 options(stringsAsFactors = FALSE)
@@ -74,6 +75,18 @@ html_escape <- function(x) {
   x
 }
 
+# PNG twin of every SVG, for viewers that cannot render SVG (e.g. AI agents).
+# ragg (ships with the tidyverse image) if present, else base png() on cairo.
+save_png <- function(p, path, width, height, dpi = 150) {
+  if (requireNamespace("ragg", quietly = TRUE)) {
+    ragg::agg_png(filename = path, width = width, height = height, units = "in", res = dpi)
+  } else {
+    grDevices::png(filename = path, width = width, height = height, units = "in", res = dpi, type = "cairo")
+  }
+  print(p)
+  invisible(grDevices::dev.off())
+}
+
 # Same fix as guide_representation_report.R: R's svg() device restarts its
 # internal <symbol>/<clipPath> id counters (glyph0-0, clip1, ...) in every
 # file, so embedding several in one page makes them collide and render with
@@ -96,6 +109,11 @@ plot_to_svg <- function(p, ns, width, height) {
   print(p)
   invisible(grDevices::dev.off())
   raw <- paste(readLines(tmp, warn = FALSE), collapse = "\n")
+  plots_dir <- file.path(outdir, "pools_comparison")
+  dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
+  base <- paste0(project, "_pools_", gsub("[^A-Za-z0-9]+", "_", sub("^cmp-", "", ns)))
+  file.copy(tmp, file.path(plots_dir, paste0(base, ".svg")), overwrite = TRUE)
+  save_png(p, file.path(plots_dir, paste0(base, ".png")), width, height)
   unlink(tmp)
   start <- regexpr("<svg[ >]", raw)
   end   <- regexpr("</svg>", raw)

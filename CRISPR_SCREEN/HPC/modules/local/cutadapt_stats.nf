@@ -4,7 +4,7 @@
  * run_cutadapt_stats(). Runs in the cutadapt container since no extra
  * dependencies are needed beyond the Python stdlib.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process CUTADAPT_STATS {
     tag "${params.project_name}"
@@ -31,7 +31,7 @@ process CUTADAPT_STATS {
         --samplesheet "${samplesheet}" \\
         --project-name "${params.project_name}" \\
         --outdir . \\
-        ${extraArgs('cutadapt_stats')}
+        ${params.cutadapt_stats_args ?: ''}
     """
 
     stub:

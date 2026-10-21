@@ -142,7 +142,10 @@ all (high far-miss).
 Every step's own `log/` subfolder below holds both its `.log` (what the
 tool said) and a `*_command.sh` (the exact command that ran, fully filled
 in) — whatever a labmate or an agent needs to reproduce or troubleshoot it,
-without needing Nextflow's own `work/` directories.
+without needing Nextflow's own work directories (the Docker versions keep
+Nextflow's work folder in `metadata/work`, with the resume cache in
+`metadata/.nextflow`; the HPC version keeps it in
+`/project/rephilllab/nf_work/<user>/<project>`).
 
 ```
 METHODS.md                      Materials and Methods of the latest successful run (see above)
@@ -150,6 +153,10 @@ original_data/fastq/            per-sample FASTQs (demultiplexing output)
 metadata/
 ├── nf_logs/                     run logs, one per run
 ├── .nextflow.log                Nextflow's own run log
+├── script_logs/                 one log per `script` run (custom analyses):
+│                                 <script>_<YYYYMMDD_HHMMSS>.log, with a header (date, project,
+│                                 script, md5, args, image, CPU/memory budget) and a footer
+│                                 "-- exit code N --"
 └── pipeline_info/                execution report, timeline, trace, DAG — provenance for every run;
                                   run_info.json (the run's resolved configuration) and
                                   software_versions.tsv (tool versions per container image),
@@ -167,7 +174,8 @@ results/
 │       ├── fastqc/
 │       ├── multiqc/
 │       ├── cutadapt_stats/      JSON + CSV demux metrics (Gini, CV, min/max fold over all barcodes incl. zero-read ones, per-sample counts)
-│       └── demux_plots/         barcode-position density plot (ggplot2 SVG) + raw CSV —
+│       └── demux_plots/         barcode-position density plot (ggplot2 SVG + PNG twin, ~150 dpi, same
+│                                 base name) + raw CSV —
 │                                 where in the read the barcode was matched, per sample;
 │                                 a shared, sharp peak confirms a consistent read structure
 ├── counts/                      *.count.txt, *.count_normalized.txt, mageck logs,
@@ -190,8 +198,12 @@ results/
 │       │                         with >1 library also <project_name>_library_breakdown.csv
 │       │                         / _wide.csv: % of each sample's reads per library
 │       │                         (the _wide file adds pct_any_library and main_library)
-│       ├── plots/               guide representation / Lorenz / ECDF / ... SVGs, drawn
-│       │                         only from tables/
+│       ├── plots/               guide representation / Lorenz / ECDF / ... as SVG + PNG twin
+│       │   │                     (~150 dpi, same base name), drawn only from tables/
+│       │   └── pools_comparison/  <project>_pools_<name>.svg/.png, only with more than one
+│       │                         library: guide representation, ECDF, Lorenz, density, controls,
+│       │                         GC, read class, library breakdown, and the bar charts of Gini,
+│       │                         90/10 ratio, % undetected and mapping %
 │       └── report/              <prefix>_qc_report.html — one self-contained page per
 │                                 library: every plot above, with a description, how to
 │                                 interpret it, and what to check if it looks poor. Built
@@ -201,5 +213,9 @@ results/
 │                                 the same plots faceted one panel per pool, to spot the one
 │                                 that looks different from the rest.
 ├── mageck_test/                 one subfolder per contrast, <treatment>_vs_<control> with ^/$ dropped (only if contrasts.csv given)
+├── <name>/                      a custom analysis (optional): a new subfolder named after the
+│                                 analysis, written by utils/<name>.<R|py|sh> when run with the
+│                                 launcher's `script` subcommand; log in metadata/script_logs/;
+│                                 optional results/<name>/METHODS.md
 └── METHODS.md                   this outdir's copy of METHODS.md
 ```

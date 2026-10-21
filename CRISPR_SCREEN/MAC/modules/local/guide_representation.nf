@@ -8,14 +8,14 @@
  *     undetected guides, mapping rate, GC vs depth, replicate correlations,
  *     dropout, near-miss/far-miss read classification, QC summary).
  *   GUIDE_REPRESENTATION_PLOT — bin/guide_representation_plot.R:
- *     those tables -> PNGs. Reads nothing else.
+ *     those tables -> SVG + PNG plots. Reads nothing else.
  *
  * Both scripts (and the plot theme) are task inputs, replaceable per project
  * from config.yaml (key = script name, e.g. `guide_representation_plot:`). Because the plot step's only
  * inputs are the tables, its script and theme, changing any of those three
  * re-runs just the plot step under -resume.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process GUIDE_REPRESENTATION_WRANGLE {
     tag "${count_table.simpleName}"
@@ -49,7 +49,7 @@ process GUIDE_REPRESENTATION_WRANGLE {
         --mageck-log="${mageck_log}" \\
         --unmapped="${unmapped_reads}" \\
         --outdir=tables \\
-        ${extraArgs('guide_representation_wrangle')}
+        ${params.guide_representation_wrangle_args ?: ''}
     """
 
     stub:
@@ -88,7 +88,7 @@ process GUIDE_REPRESENTATION_PLOT {
         --prefix="${prefix}" \\
         --theme="${theme}" \\
         --outdir=plots \\
-        ${extraArgs('guide_representation_plot')}
+        ${params.guide_representation_plot_args ?: ''}
     """
 
     stub:
@@ -99,5 +99,6 @@ process GUIDE_REPRESENTATION_PLOT {
     """
     mkdir -p plots
     touch "plots/${prefix}_guide_representation.svg"
+    touch "plots/${prefix}_guide_representation.png"
     """
 }

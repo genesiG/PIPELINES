@@ -11,7 +11,7 @@
  * header for why that keeps the total read count, and read classification,
  * fully accounted for.
  */
-include { runner; extraArgs } from './functions'
+include { runner } from './functions'
 
 process GUIDE_ANCHOR_TRIM {
     tag "${lib_name}"
@@ -45,7 +45,7 @@ process GUIDE_ANCHOR_TRIM {
         --fastq "${fastq_args.join(' ')}" \\
         --labels "${sample_label_str}" \\
         --outdir . \\
-        ${extraArgs('guide_anchor_trim')}
+        ${params.guide_anchor_trim_args ?: ''}
     """
 
     stub:

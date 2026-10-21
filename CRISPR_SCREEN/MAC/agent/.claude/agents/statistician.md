@@ -18,6 +18,7 @@ Project rules (all agents)
 Before changing anything
 - State what question the statistic answers, the assumptions it needs, and whether this screen breaks them. For example, median or total normalisation assumes that most guides do not change; a screen where most guides drop out, or where a few genes are strongly selected, can break that assumption.
 - Check the design first. Contrast patterns are regex SEARCHES on sample names (anchor them with ^ and $). Replicates of one condition are pooled into one comparison. Treatment and control must sit in the same library. Without a `library` column, contrasts cannot be tested.
+- You may design analyses beyond MAGeCK (for example DESeq2 or edgeR on guide counts, or overlap with RNA-seq). State the assumptions and what the analysis cannot show. The pipeline image has R 4.3 with tidyverse, data.table, yaml and jsonlite and Python 3.9 with the standard library only: no Bioconductor (no DESeq2, edgeR, limma) and no pandas yet. Say which tool needs which environment and let the lead decide; running outside the image (Tier 2) only with the user's OK. The script goes in utils/<name>.<R|py|sh>, outputs in results/<name>/, run by the lead with the launcher's `script` subcommand.
 - Respect the decisions the lead has already made (in the brief or the project notes). If one looks wrong, give your evidence and do not change it.
 - Write a short design note: the change, why it is needed, its expected effect on the existing numbers, and how to verify it.
 

@@ -39,6 +39,7 @@ and commits. Every task in the table goes to its agent.
 | Comparing with earlier or collaborator numbers | `output-verifier` | haiku |
 | Statistics questions and contrast design | `statistician` | sonnet |
 | Plots of a project | `figure-maker` | sonnet |
+| A project's own analysis beyond the pipeline (`script` command; see the project's `AGENTS.md`) | `statistician` (design), `code-supervisor` (script), `log-inspector`, `methods-writer` | sonnet / haiku |
 | Methods text | `methods-writer` | sonnet |
 | Edits to this pipeline (section B only) | `code-supervisor` (spawns `implementer`) | sonnet |
 | Outside facts (tool flags, library formats) | `web-researcher` | haiku |
@@ -50,7 +51,24 @@ Mandatory triggers:
 - preparing sample, library or contrast files from messy sources;
 - after every run;
 - before reporting statistics or comparing with earlier numbers;
-- any change to the pipeline.
+- any change to the pipeline;
+- right after `init` (see below).
+
+**After `init`:** users usually ask you to set the project up before running, so
+the project's `.claude\agents\` and `CLAUDE.md`/`AGENTS.md` appear mid-session.
+Immediately after `init`, read the new project's `CLAUDE.md` and `AGENTS.md` and
+follow them from then on (delegation table and triggers included). If Claude Code
+was started in this folder, its `.claude\agents\` is the same kit, so the agents
+are available now. If they are not listed as available subagent types, either
+spawn a general-purpose agent whose prompt is the agent file's body (after the
+frontmatter) plus the brief, with the model from the file's frontmatter, or ask
+the user to restart Claude Code in the project folder (recommended for every
+later session: start Claude Code inside the project folder).
+
+**Analyses beyond the pipeline** (a plot or test the pipeline doesn't do) are
+allowed: the script goes in the project's `utils\` and runs with
+`.\utils\run_crisprscreen.bat script utils\<name>.<R|py|sh>`, writing to
+`results\<name>\`. The workflow and rules are in the project's `AGENTS.md`.
 
 The delegation rules for project folders are in `agent\CLAUDE.md`, which is copied into projects.
 

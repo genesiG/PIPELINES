@@ -40,7 +40,7 @@ project; it is not used here.)
 | After every run, success or failure | `log-inspector`, then `results-reporter` on success | haiku |
 | Comparing with earlier or collaborator numbers | `output-verifier` | haiku |
 | Statistics questions and contrast design | `statistician` | sonnet |
-| Plots | `figure-maker` | sonnet |
+| Plots (replace the right script in the project's `utils/`, re-run, review the PNGs) | `figure-maker` | sonnet |
 | Methods text | `methods-writer` | sonnet |
 | Edits to this pipeline (section B only) | `code-supervisor` (spawns `implementer`) | sonnet |
 | Outside facts (tool flags, library formats) | `web-researcher` | haiku |
@@ -53,6 +53,26 @@ Mandatory triggers (do the delegation, don't skip it):
 - after every run, success or failure;
 - before reporting statistics or comparing with earlier numbers;
 - any change to the pipeline (section B).
+
+## After `init`: switch to the project's instructions
+
+Users usually ask you to set up the project before running it, so the project's
+`.claude/agents`, `CLAUDE.md` and `AGENTS.md` are created mid-session. Immediately after
+`init`, read the new project's `CLAUDE.md` and `AGENTS.md` and follow them from then on
+(delegation table and triggers included). If Claude Code was started in the pipeline
+folder, its `.claude/agents` is the same kit, so the agents are available now. If they are
+not listed as available subagent types, either spawn a general-purpose agent whose prompt
+is the agent file's body (after the frontmatter) plus the brief, with the model from the
+file's frontmatter, or ask the user to restart Claude Code in the project folder
+(recommended for every later session: start Claude Code inside the project folder).
+
+## Analyses beyond the pipeline
+
+Analyses the pipeline doesn't do are allowed: the script goes in the project's
+`utils/<name>.<R|py|sh>`, writes only to a new `results/<name>/`, and runs with
+`./utils/run_crisprscreen.sh script utils/<name>.R` (pinned image, memory limits, log in
+`metadata/script_logs/`). Workflow and rules: "Analyses beyond the pipeline" in the
+project's `AGENTS.md`. Never run the pipeline's own steps any other way than `run`.
 
 ## How to brief
 

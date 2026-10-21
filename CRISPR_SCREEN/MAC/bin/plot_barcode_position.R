@@ -21,7 +21,8 @@
 #'             (default: my_theme.R next to this script)
 #'   --bw      kernel bandwidth in bp (default: 0.5 — narrow, since positions
 #'             are integers and the expected peak is a single position)
-#'   --outdir  where to write the SVG (default: current directory)
+#'   --outdir  where to write the plot (default: current directory); an SVG
+#'             and a PNG twin (same base name, 150 dpi, same size in inches)
 #' ##########################################################################
 
 options(stringsAsFactors = FALSE)
@@ -88,6 +89,18 @@ p <- ggplot(df, aes(x = position, weight = weight, color = sample, fill = sample
   ) +
   my_theme
 
+# PNG twin of every SVG, for viewers that cannot render SVG (e.g. AI agents).
+# ragg (ships with the tidyverse image) if present, else base png() on cairo.
+save_png <- function(p, path, width, height, dpi = 150) {
+  if (requireNamespace("ragg", quietly = TRUE)) {
+    ragg::agg_png(filename = path, width = width, height = height, units = "in", res = dpi)
+  } else {
+    grDevices::png(filename = path, width = width, height = height, units = "in", res = dpi, type = "cairo")
+  }
+  print(p)
+  invisible(grDevices::dev.off())
+}
+
 out_path <- file.path(outdir, paste0(opt$project, "_barcode_position_density.svg"))
 # ggsave(device = "svg") needs svglite, which rocker/tidyverse lacks — use
 # base R's own SVG device instead.
@@ -95,3 +108,6 @@ svg(out_path, width = 9, height = 5)
 print(p)
 invisible(dev.off())
 cat("Saved:", out_path, "\n")
+png_path <- sub("\\.svg$", ".png", out_path)
+save_png(p, png_path, 9, 5)
+cat("Saved:", png_path, "\n")
