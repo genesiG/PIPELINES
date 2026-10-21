@@ -1,0 +1,69 @@
+#!/bin/sh
+# omics-slim-env - shrink a finished conda environment by deleting files that are
+# not needed at run time (docs, build-only toolchain pieces, test suites, ...).
+# Usage: omics-slim-env [--keep-toolchain] <env prefix>
+#   --keep-toolchain  keep compilers, headers and static libraries (env r, so that
+#                     install.packages/devtools/pak can still compile from source)
+# Runs in the same Dockerfile RUN as the env creation, so the layer really shrinks.
+# conda-meta is never touched (versions.tsv relies on it).
+set -eu
+
+keep_toolchain=0
+if [ "${1:-}" = "--keep-toolchain" ]; then
+    keep_toolchain=1
+    shift
+fi
+if [ "$#" -ne 1 ]; then
+    echo "usage: omics-slim-env [--keep-toolchain] <env prefix>" >&2
+    exit 1
+fi
+p="$1"
+if [ ! -d "$p/conda-meta" ]; then
+    echo "omics-slim-env: $p/conda-meta not found, not a conda environment" >&2
+    exit 1
+fi
+
+before=$(du -sm "$p" | cut -f1)
+
+# --- all envs ---------------------------------------------------------------
+# Documentation.
+rm -rf "$p/share/doc" "$p/share/man" "$p/share/info" "$p/share/gtk-doc" "$p/man" "$p/doc"
+
+# LLVM/clang libraries and Qt build tools: only clang-based build tools need them;
+# nothing at run time (~600 MB per Qt env).
+rm -f "$p"/lib/libLLVM* "$p"/lib/libclang* "$p"/lib/libLTO* \
+      "$p/bin/qdoc" "$p/bin/shiboken6" "$p"/bin/qmake*
+
+# JDK build-only files; the JRE and java stay.
+if [ -d "$p/lib/jvm" ]; then
+    rm -rf "$p/lib/jvm/jmods" "$p/lib/jvm/include" "$p/lib/jvm/man"
+    rm -f "$p/lib/jvm/lib/src.zip"
+fi
+
+# Python test suites (the find loops never fail when nothing matches).
+for sp in "$p"/lib/python3*/site-packages; do
+    [ -d "$sp" ] || continue
+    find "$sp" -type d \( -name tests -o -name test \) -prune -exec rm -rf {} + || true
+done
+rm -rf "$p"/lib/python3*/test
+
+# R packages: vignettes and tests; the help/ folder stays.
+if [ -d "$p/lib/R/library" ]; then
+    find "$p/lib/R/library" -mindepth 2 -maxdepth 2 -type d \( -name doc -o -name tests \) -exec rm -rf {} + || true
+fi
+
+# --- toolchain ----------------------------------------------------------------
+if [ "$keep_toolchain" = 0 ]; then
+    # The conda GCC/gfortran toolchain and sysroot come in as run dependencies of
+    # r-base and are only needed to compile R packages from source.
+    rm -rf "$p/include" "$p/x86_64-conda-linux-gnu" "$p/libexec/gcc" "$p/lib/gcc" "$p/lib/R/include"
+    rm -f "$p"/bin/x86_64-conda-linux-gnu-*
+    find "$p" -name '*.a' -not -path "$p/lib/R/library/*" -type f -delete
+else
+    # Keep compilers, headers, static libs and BH; only drop the sysroot locale
+    # archive (213 MB, not needed to compile).
+    rm -rf "$p/x86_64-conda-linux-gnu/sysroot/usr/lib64/locale"
+fi
+
+after=$(du -sm "$p" | cut -f1)
+echo "omics-slim-env: $p ${before}M -> ${after}M"

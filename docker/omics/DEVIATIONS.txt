@@ -1,0 +1,44 @@
+# Deviations from the lab HPC specs (D:\env_specs\*.clean.yml) for the omics image, phase 1.
+# Tab-separated: env, package, wanted, got, why
+env	package	wanted	got	why
+r	bioconductor-* (all)	Bioc 3.18 versions in chipseq spec (e.g. deseq2 1.42.0, edger 4.0.16, clusterprofiler 4.10.0, csaw 1.36.0, genomicranges 1.54.1, rtracklayer 1.62.0, org.hs.eg.db 3.18.0, biostrings 2.70.1)	Bioc 3.20 for R 4.4 (e.g. deseq2 1.46.0, edger 4.4.0, limma 3.62.1, clusterprofiler 4.14.0, csaw 1.40.0, genomicranges 1.58.0, rtracklayer 1.66.0, org.hs.eg.db 3.20.0, biostrings 2.74.0, jaspar2024 0.99.6)	policy: all Bioconductor from the release matching R 4.4.3; Bioconductor packages are not pinned (lock records exact builds). bioconda carries Bioc 3.20 as r44 builds
+r	icu	73.2 (chipseq)	75.1 (floating, lock has icu 75.1)	r-base 4.4.3 requires icu >=75.1; pin dropped
+r	r-base	4.4.3 (crispro; chipseq/crisprscreen 4.3.3; rnaseq 4.4.2)	4.4.3	as policy (latest)
+r	python	3.12.13 (none in lab R env)	3.12.13	added pin: without it the solver floated to python 3.15; keeps all envs on the lab python
+r	r-gridextra	2.3	2.3.1	conda spec "=2.3" matches 2.3.x; solver took the patch release
+r	r-gglorenz	listed in request	NOT AVAILABLE on conda-forge/bioconda	not installed (no pip/source install by rule)
+r	r-ggpubr	unpinned	0.6.3 (pinned)	latest conda ggpubr 1.0.0 needs dplyr >=1.2.0 and tidyr >=1.3.2, but specs fix dplyr 1.1.4 / tidyr 1.3.1 (conda metadata does not state this, loading fails)
+r	r-rstatix	unpinned	0.7.3 (pinned)	rstatix 1.x goes with the ggpubr 1.0.0 / dplyr 1.2 generation; kept consistent with ggpubr 0.6.3
+r	r-ggbreak	unpinned	0.1.7 (pinned)	ggbreak 0.2.2 needs ggplot2 >=4.0.0, specs fix ggplot2 3.5.2
+r	r-ggformula	unpinned (pulled in by r-mess)	1.0.1 (pinned)	ggformula 2.0.0 needs ggplot2 >=4.0. NOTE 1.0.1 DESCRIPTION also says ggplot2 >=4.0 but it loads fine with 3.5.2 (loadNamespace OK); no older ggformula exists for R 4.4 on conda. Only r-mess uses it; plotting functions of ggformula untested
+r	r-dbplyr	unpinned	2.5.2 (pinned)	dbplyr 2.6.0 needs dplyr >=1.2.0 (missing in conda metadata): its load failed and broke the post-link install of JASPAR2024 (data package) with dplyr 1.1.4
+r	r-lme4 / r-reformulas	unpinned	lme4 1.1_38, reformulas 0.4.4 (lme4 pinned, reformulas added)	solver picked lme4 1.1-35.5, built against Matrix ABI 1 (Matrix is ABI 2: lme4 warns); lmerTest 3.2-1 needs reformulas but the conda recipe does not list it
+r	r-matrix	-	1.7_4	floats (ships with R 4.4.3 solve); recorded for information
+r	BSgenome.Hsapiens.NCBI.T2T.CHM13v2.0	installed in the first build	removed (not in the image)	user decision: saves 744 MB. Kept BSgenome.Hsapiens.UCSC.hs1 (its chromosome names match the curated UCSC-named GTF and TxDb) and BSgenome.Mmusculus.UCSC.mm39. The lock line was deleted by hand (no re-solve), nothing else in r.lock.txt changed
+r	r-plotly, r-magick, r-devtools, r-pak, r-reticulate, r-showtext, r-png, r-cairo, r-readxl, r-biocmanager, r-purrr, r-readr, r-tidyverse, r-dplyr, r-ggplot2 ...	spec pins	all kept exactly (e.g. r-cairo 1.6_2, r-png 0.1_8, r-showtext 0.9_7, r-pak 0.9.0, r-purrr 1.1.0)	no deviation: the conda builds exist for r44 and solve together
+r	bioconductor annotation/data packages (GenomeInfoDbData, GO.db, reactome.db, org.*.eg.db, JASPAR2024, BSgenome.*, TxDb.*)	-	installed by post-link scripts	bioconda data packages download their tarballs from bioconductor.org at INSTALL time (md5-checked by the script, not part of the explicit lock) -> the image build needs network and the result depends on bioconductor.org serving the same files. The post-link scripts also need yq/R/curl already linked, hence the lock order (see below)
+all	lock file order	"sorted urls"	solver (dependency) order, NOT sorted	an explicit install runs in file order; with a sorted file bioconductor-* data packages were linked before yq and their post-link scripts failed silently (GenomeInfoDbData, GO.db, org.*.eg.db missing, most Bioconductor packages could not load)
+py	biopython	1.78	1.81	1.78..1.80 cannot be installed with python 3.12 + numpy 2.4.6 (1.78 needs python <=3.8 / numpy <2); 1.81 is the nearest release that solves (smoke-tested: PairwiseAligner OK, Bio.pairwise2 deprecated warning)
+py	numpy	2.4.6 (chipseq) vs 1.26.4 (crispro)	2.4.6	max across specs
+py	scipy	1.15.3 (crispro)	1.18.1	unpinned: spec value is a minimum ("1.15.3 or newer" allowed by request)
+py	pymol-open-source	pymol 3.1.5.1 (crispro, schrodinger) / pymol-bundle 2.6.2 (crisprscreen, schrodinger)	pymol-open-source 3.1.0	schrodinger channel not used (licensed bundle); open-source build from conda-forge, 3.1.5.1 not published there
+py	python-docx	1.2.0 via pip	1.2.0 via conda-forge	no pip needed
+py	matplotlib	3.10.0 (crispro) vs 3.9.x/3.8.4	3.10.0	max across specs
+ngs	matplotlib	3.8.4 (chipseq)	3.8.4 (floating, chosen by deeptools/pygenometracks)	formerly env ngspy, merged into ngs; not pinned in ngs; matches the chipseq spec by coincidence
+ngs	numpy	2.4.6	2.5.4 (floating)	formerly env ngspy, merged into ngs; not pinned (numpy has no own pin in ngs); py env has 2.4.6
+ngs	r-base (for SEACR)	4.4.3	4.2.3	seacr 1.3 depends on r-base; preseq 2.0.2 needs gsl 1.16 which conflicts with r-base 4.4.3 (needs gsl 2.7). Options: keep as is (SEACR runs on R 4.2.3, only base R used by the wrapper) or drop preseq=2.0.2
+ngs	hisat2	2.2.1 (source build in rnaseq spec)	2.2.1 conda package (bioconda)	conda build used instead of a source build
+ngs	samtools / htslib	1.23 (chipseq), 1.22.1 (rnaseq)	1.23.1 (pinned =1.23)	conda spec "=1.23" matches 1.23.x; pin kept in the merged env (formerly env ngspy also carried the pin; without it ngspy took samtools/htslib 1.24)
+ngs	python	-	3.12.13 (pinned)	added pin; otherwise python 3.14 floated (formerly env qc: python 3.13 floated; qc is merged into ngs)
+ngs	openjdk	unpinned	23.0.2 (lock has openjdk 23.0.2)	unpinned; the old qc env had 25.0.2, the merged ngs env gets 23.0.2 from the picard/trimmomatic solve; fastqc 0.12.1 works with it
+ngs	multiqc / cutadapt / fastqc	multiqc 1.35, cutadapt 5.1 (pip in specs), fastqc 0.12.1	multiqc 1.35, cutadapt 5.2 (conda), fastqc 0.12.1	formerly env qc, merged into ngs; cutadapt 5.2 from conda instead of pip 5.1, as in the specs otherwise
+mageck	python / numpy	3.9.23	3.9.23 (numpy 2.0.2, scipy 1.13.1)	no deviation
+all	channels	defaults/r/schrodinger in specs	conda-forge, bioconda only (strict priority, nodefaults)	requested
+all	pip	python-docx==1.2.0, cutadapt==5.1 (pip in specs)	none	both available on conda; explicit locks cannot hold pip packages. crispro 1.0.2 (setup.py install from /home/genesi/crispro) is NOT part of this image phase
+crispro	python	3.12.10 (user env)	3.10.x (3.10.22 in lock)	crispro 1.0.2 imports Bio.SubsMat (removed in biopython 1.80); biopython 1.79 is the newest with SubsMat and has no python 3.11/3.12 conda build; python 3.10 is the version for which the whole functional combination (numpy 1.26.4, pandas 1.5.3, matplotlib 3.5.3, seaborn 0.11.2, scipy 1.15.2, pymol-open-source) exists
+crispro	biopython	1.78	1.79	1.78 conda builds exist only for python <=3.9 (incompatible with the python 3.10 combination); 1.79 is the nearest build for python 3.10 and still has Bio.SubsMat
+crispro	scipy	1.15.3	1.15.2	scipy 1.15.3 is not on conda-forge linux-64 (1.15.2 then 1.16.0)
+crispro	pymol-open-source	3.1.5.1 (user env)	3.1.0	newest pymol-open-source on conda-forge is 3.1.0 (3.1.5.1 is not published there)
+crispro	seaborn / pandas / matplotlib	0.13.2 / 2.2.3 / 3.10.0 (user env)	0.11.2 / 1.5.3 / 3.5.3	crispro 1.0.2 code needs the old seaborn API: plot_annotations calls sns.violinplot(x, y) positionally, which seaborn >=0.12 rejects (TypeError). This combination ran the crispro README example end-to-end
+protiler	r-base	>=3.5 (spec)	4.4.3	breakfast 0.1.0 (pure R, imports plyr) builds and runs on R 4.4.3; latest minor of lab R policy
+protiler	seaborn, matplotlib	unpinned	0.13.2, 3.7.3	spec unpinned; matplotlib 3.7.3 is the newest for python 3.8

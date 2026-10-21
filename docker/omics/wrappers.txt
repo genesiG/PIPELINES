@@ -1,0 +1,144 @@
+# wrappers.txt - every command that /usr/local/bin gets a wrapper for.
+# Columns (whitespace separated): env  executable
+# The Dockerfile generates /usr/local/bin/<executable> from each line:
+#   #!/bin/sh
+#   export PATH=/opt/envs/<env>/bin:$PATH
+#   exec /opt/envs/<env>/bin/<executable> "$@"
+# Exception (handled in the Dockerfile loop):
+#   crispro  PATH also gets /opt/envs/r/bin (its R scripts call Rscript, env crispro has none)
+# An executable that exists in several envs is listed ONCE, for the env named here:
+#   samtools bgzip tabix htsfile bedtools -> ngs (the only env that has them now)
+#   cutadapt -> ngs (5.2; env crispro has its own 5.1, used by the crispro wrapper)
+#   pymol -> py
+# Add a line here, bump VERSION, rebuild: nothing else needs editing.
+#
+# env  executable
+# --- env r
+r	R
+r	Rscript
+r	pandoc
+# --- env py
+py	python3
+py	python
+py	pip
+py	pymol
+# --- env ngs
+ngs	bowtie2
+ngs	bowtie2-align-l
+ngs	bowtie2-align-s
+ngs	bowtie2-build
+ngs	bowtie2-build-l
+ngs	bowtie2-build-s
+ngs	bowtie2-inspect
+ngs	bowtie2-inspect-l
+ngs	bowtie2-inspect-s
+ngs	hisat2
+ngs	hisat2-align-l
+ngs	hisat2-align-s
+ngs	hisat2-build
+ngs	hisat2-build-l
+ngs	hisat2-build-s
+ngs	hisat2-inspect
+ngs	hisat2-inspect-l
+ngs	hisat2-inspect-s
+ngs	hisat2_extract_exons.py
+ngs	hisat2_extract_snps_haplotypes_UCSC.py
+ngs	hisat2_extract_snps_haplotypes_VCF.py
+ngs	hisat2_extract_splice_sites.py
+ngs	hisat2_read_statistics.py
+ngs	hisat2_simulate_reads.py
+ngs	extract_exons.py
+ngs	extract_splice_sites.py
+ngs	samtools
+ngs	bgzip
+ngs	tabix
+ngs	htsfile
+ngs	sambamba
+ngs	bedtools
+ngs	bedops
+ngs	bedmap
+ngs	bedextract
+ngs	sort-bed
+ngs	convert2bed
+ngs	starch
+ngs	unstarch
+ngs	starchcat
+ngs	starchstrip
+ngs	starch-diff
+ngs	closest-features
+ngs	gff2bed
+ngs	vcf2bed
+ngs	bam2bed
+ngs	gtf2bed
+ngs	wig2bed
+ngs	psl2bed
+ngs	rmsk2bed
+ngs	sam2bed
+ngs	gvf2bed
+ngs	bam2starch
+ngs	gff2starch
+ngs	gtf2starch
+ngs	gvf2starch
+ngs	psl2starch
+ngs	rmsk2starch
+ngs	sam2starch
+ngs	vcf2starch
+ngs	wig2starch
+ngs	picard
+ngs	preseq
+ngs	trimmomatic
+ngs	featureCounts
+ngs	subread-align
+ngs	subread-buildindex
+ngs	subjunc
+ngs	sublong
+ngs	subread-fullscan
+ngs	exactSNP
+ngs	propmapped
+ngs	qualityScores
+ngs	removeDup
+ngs	repair
+ngs	subindel
+ngs	bedGraphToBigWig
+ngs	bigWigToBedGraph
+ngs	SEACR_1.3.sh
+ngs	SEACR_1.3.R
+ngs	seqkit
+# deepTools, MACS3, pyGenomeTracks (formerly env ngspy)
+ngs	bamCoverage
+ngs	bamCompare
+ngs	bigwigCompare
+ngs	bigwigAverage
+ngs	computeMatrix
+ngs	computeMatrixOperations
+ngs	plotHeatmap
+ngs	plotProfile
+ngs	plotCorrelation
+ngs	plotPCA
+ngs	plotFingerprint
+ngs	plotEnrichment
+ngs	plotCoverage
+ngs	multiBamSummary
+ngs	multiBigwigSummary
+ngs	alignmentSieve
+ngs	estimateReadFiltering
+ngs	estimateScaleFactor
+ngs	bamPEFragmentSize
+ngs	computeGCBias
+ngs	correctGCBias
+ngs	pyGenomeTracks
+ngs	pgt
+ngs	make_tracks_file
+ngs	macs3
+# QC (formerly env qc)
+ngs	fastqc
+ngs	multiqc
+ngs	cutadapt
+# --- env mageck
+mageck	mageck
+mageck	mageckGSEA
+mageck	RRA
+# --- env crispro
+crispro	crispro
+# --- env protiler
+protiler	protiler
