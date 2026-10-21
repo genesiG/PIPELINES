@@ -1109,6 +1109,8 @@ class Methods:
             "**Undetected sgRNAs**: the percentage of library sgRNAs with no reads; flagged when ≥ 5%.",
             "**Representation within 2 log2 units**: the percentage of sgRNAs whose log2(count + 1) lies within "
             "2 of the log2 of the sample's mean count.",
+            "**Sequencing depth**: total reads per sample (from the MAGeCK count log), reads matching a library "
+            "sgRNA, and reads per sgRNA (reads matched to the library divided by the number of sgRNAs in the library).",
         ]
         if classified:
             note = (f" Not computed for {oxford(uneven)}, whose sgRNAs differ in length." if uneven else "")
@@ -1118,8 +1120,23 @@ class Methods:
                          "errors) and all others as far-misses." + note)
         if multi:
             items.append("**Concordance between samples**: Pearson correlation of log10(count + 1) and Spearman "
-                         "correlation of raw counts, for every pair of samples counted against the same library.")
-        plots = (f"Lorenz curves, count distributions and GC content against read depth were plotted with ggplot2 "
+                         "correlation of raw counts, for every pair of samples counted against the same library; the "
+                         "samples were ordered in the heatmaps by hierarchical clustering (average linkage on 1 minus "
+                         "the Pearson correlation).")
+        pca_libs = [lib for lib in self.lib_names if len(self.active_samples(lib)) >= 3]
+        if pca_libs:
+            note = (" Libraries with fewer than three samples were not analysed."
+                    if len(pca_libs) < len(self.lib_names) else "")
+            items.append("**Principal component analysis**: sample counts were converted to log2(counts per million "
+                         "+ 1) (counts per million = count divided by the sample's total counts, times 10^6), guides "
+                         "without reads in any sample were removed, and a principal component analysis was run with "
+                         f"R's {code('prcomp')} (centred, not scaled) on the samples; the percentage of variance "
+                         "explained by each component is reported." + note)
+        plots = (f"Lorenz curves, count distributions (ECDF, with the mean read count per sgRNA of each sample), "
+                 f"GC content against read depth, "
+                 + ("principal component plots, " if pca_libs else "")
+                 + ("correlation heatmaps, " if multi else "")
+                 + f"and read depth were plotted with ggplot2 "
                  f"({self.cite('wickham2016')}) and assembled with the metrics into an HTML report for each library"
                  + (", and one report comparing all libraries" if len(self.libraries) > 1 else "") + ".")
         blocks = [title, text, "\n".join(f"- {i}" for i in items), plots]

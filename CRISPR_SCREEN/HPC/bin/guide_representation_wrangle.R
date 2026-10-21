@@ -41,7 +41,14 @@
 #'   <prefix>_read_classification.csv    sample, reads, mappedreads, pct_exact_match,
 #'                                       near_miss_reads, pct_near_miss, far_miss_reads,
 #'                                       pct_far_miss (if --library, --mageck-log, --unmapped)
+#'   <prefix>_read_depth.csv             sample, total_reads, reads_matched_to_library
+#'                                       (total_reads NA without --mageck-log)
+#'   <prefix>_pca.csv                    sample, PC1, PC2 (, PC3)  (if >= 3 samples)
+#'   <prefix>_pca_variance.csv           PC, pct_variance          (if >= 3 samples)
+#'                                       (PCA of log2(CPM + 1), guides zero in all samples dropped)
+#'   <prefix>_correlation_order.csv      sample, order  (hclust leaf order of 1 - Pearson; if >= 2 samples)
 #'   <prefix>_qc_summary.csv             one row per sample, all headline metrics + flags
+#'                                       (incl. reads_per_guide = matched reads / total guides)
 #' ##########################################################################
 
 options(stringsAsFactors = FALSE)
@@ -204,6 +211,23 @@ if (!is.null(mapping_df) && nrow(mapping_df) > 0) {
   mapping_df <- NULL
 }
 
+# ---- Read depth (total vs library-matched reads) --------------------------
+# Without a mageck log the total is unknown (NA) and the matched reads are the
+# count table's own column sums.
+if (!is.null(mapping_df)) {
+  read_depth_df <- data.frame(sample = active_samples) |>
+    left_join(mapping_df |> rename(sample = label) |>
+                select(sample, total_reads = reads, reads_matched_to_library = mappedreads),
+              by = "sample")
+} else {
+  read_depth_df <- data.frame(
+    sample                   = active_samples,
+    total_reads              = NA_real_,
+    reads_matched_to_library = as.numeric(colSums(df[, active_samples, drop = FALSE], na.rm = TRUE))
+  )
+}
+save_table(read_depth_df, "read_depth")
+
 # ---- Library sequences (used by GC content below and read classification) -
 lib_seqs <- NULL
 lib_path <- opt$library
@@ -312,8 +336,51 @@ if (length(active_samples) >= 2) {
     by = c("Sample_A", "Sample_B")
   ) |> mutate(across(c(Pearson, Spearman), \(x) round(x, 4)))
   save_table(cor_long, "replicate_correlations")
+
+  # Leaf order of average-linkage clustering on 1 - Pearson: the plot step uses
+  # it to put similar samples next to each other in the heatmaps.
+  dist_m <- 1 - pearson_m
+  dist_m[is.na(dist_m)] <- 0
+  hc <- hclust(as.dist(dist_m), method = "average")
+  cor_order_df <- data.frame(sample = colnames(pearson_m)[hc$order],
+                             order  = seq_along(hc$order))
+  save_table(cor_order_df, "correlation_order")
 } else {
   cat("  [skip] replicate correlation: only 1 active sample\n")
+}
+
+# ---- PCA of samples (needs >= 3 samples) ------------------------------------
+# log2(CPM + 1) per sample (CPM over all guides of the library), guides with
+# zero reads in every active sample removed, samples x guides matrix, centred,
+# unscaled.
+pca_counts <- as.matrix(df[, active_samples, drop = FALSE])
+pca_counts <- pca_counts[rowSums(pca_counts, na.rm = TRUE) > 0, , drop = FALSE]
+pca_skip <- NULL
+if (length(active_samples) < 3) {
+  pca_skip <- paste("only", length(active_samples), "active sample(s), need >= 3")
+} else if (nrow(pca_counts) < 2) {
+  pca_skip <- "fewer than 2 guides with reads"
+} else {
+  pca_lib_sizes <- colSums(as.matrix(df[, active_samples, drop = FALSE]), na.rm = TRUE)
+  pca_logcpm    <- log2(sweep(pca_counts, 2, pca_lib_sizes, "/") * 1e6 + 1)
+  pca_fit       <- prcomp(t(pca_logcpm), center = TRUE, scale. = FALSE)
+  if (!is.finite(sum(pca_fit$sdev^2)) || sum(pca_fit$sdev^2) <= 0) {
+    pca_skip <- "total variance is zero"
+  }
+}
+if (is.null(pca_skip)) {
+  n_pc_var <- min(length(active_samples) - 1, 10)
+  n_pc_out <- if (min(3, length(active_samples) - 1) >= 3) 3 else 2
+  pca_df <- data.frame(sample = active_samples, pca_fit$x[, seq_len(n_pc_out), drop = FALSE],
+                       row.names = NULL)
+  save_table(pca_df, "pca")
+  pca_var_df <- data.frame(
+    PC           = paste0("PC", seq_len(n_pc_var)),
+    pct_variance = round(100 * pca_fit$sdev[seq_len(n_pc_var)]^2 / sum(pca_fit$sdev^2), 2)
+  )
+  save_table(pca_var_df, "pca_variance")
+} else {
+  cat("  [skip] PCA:", pca_skip, "\n")
 }
 
 # ---- Dropout summary ------------------------------------------------------
@@ -362,6 +429,12 @@ if (!is.null(classification_df)) {
     left_join(classification_df |> select(sample, near_miss_reads, pct_near_miss, far_miss_reads, pct_far_miss),
               by = "sample")
 }
+summary_df <- summary_df |>
+  left_join(read_depth_df |> select(sample, reads_matched_to_library), by = "sample") |>
+  mutate(reads_per_guide = round(reads_matched_to_library / total_guides, 1)) |>
+  select(-reads_matched_to_library)
+summary_df <- summary_df |>
+  relocate(reads_per_guide, .after = if ("mappedreads" %in% colnames(summary_df)) "mappedreads" else "zero_guides")
 summary_df <- summary_df |>
   mutate(
     library_skew_flag = is.na(ratio_90_10) | ratio_90_10 >= 10,

@@ -6,7 +6,8 @@
  *     count table (+ MAGeCK library, + mageck count log, + unmapped-reads
  *     file) -> CSV tables (Lorenz/Gini, ECDF input, percentile ratio,
  *     undetected guides, mapping rate, GC vs depth, replicate correlations,
- *     dropout, near-miss/far-miss read classification, QC summary).
+ *     correlation order, PCA scores/variance, read depth, dropout,
+ *     near-miss/far-miss read classification, QC summary).
  *   GUIDE_REPRESENTATION_PLOT — bin/guide_representation_plot.R:
  *     those tables -> SVG + PNG plots. Reads nothing else.
  *

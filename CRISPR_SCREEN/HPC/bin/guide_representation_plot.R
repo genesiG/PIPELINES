@@ -19,6 +19,12 @@
 #'   --outdir      where to write the plots (default: current directory)
 #'   --dpi         PNG resolution (default: 150)
 #'
+#' Plots: guide representation (ranked), ECDF + mean-read-count bars, Lorenz,
+#' density, control vs targeting, 90/10 ratio, undetected guides, mapping rate,
+#' read classification, GC vs depth, PCA of samples (>= 3 samples), Pearson and
+#' Spearman correlation heatmaps (ordered by the wrangle step's hclust order),
+#' read depth (total vs library-matched reads per sample).
+#'
 #' Every plot is written as an SVG and a PNG twin (same base name, default 150 dpi,
 #' same width/height in inches), so viewers that cannot render SVG can open it.
 #'
@@ -60,12 +66,29 @@ if (is.null(theme_file)) {
 source(theme_file) # defines `my_theme`
 
 # ---- Helpers --------------------------------------------------------------
+short_label <- function(x) {
+  out <- character(length(x))
+  for (i in seq_along(x)) {
+    v <- x[i]
+    out[i] <- if (is.na(v)) NA_character_
+      else if (abs(v) >= 1e9) paste0(format(v / 1e9, trim = TRUE, scientific = FALSE, digits = 3), "B")
+      else if (abs(v) >= 1e6) paste0(format(v / 1e6, trim = TRUE, scientific = FALSE, digits = 3), "M")
+      else if (abs(v) >= 1e3) paste0(format(v / 1e3, trim = TRUE, scientific = FALSE, digits = 3), "K")
+      else format(v, trim = TRUE, scientific = FALSE, digits = 3)
+  }
+  out
+}
+
 read_table <- function(name) {
   path <- file.path(tables_dir, paste0(prefix, "_", name, ".csv"))
   if (!file.exists(path)) {
     return(NULL)
   }
   read.csv(path, check.names = FALSE)
+}
+# A ggplot is print()ed; anything else (gtable/grid object) is drawn on a new page.
+draw_plot <- function(p) {
+  if (inherits(p, "ggplot")) print(p) else { grid::grid.newpage(); grid::grid.draw(p) }
 }
 # PNG twin of every SVG, for viewers that cannot render SVG (e.g. AI agents).
 # ragg (ships with the tidyverse image) if present, else base png() on cairo.
@@ -75,13 +98,13 @@ save_png <- function(p, path, width, height, dpi = 150) {
   } else {
     grDevices::png(filename = path, width = width, height = height, units = "in", res = dpi, type = "cairo")
   }
-  print(p)
+  draw_plot(p)
   invisible(grDevices::dev.off())
 }
 save_plot <- function(p, name, width, height) {
   path <- file.path(outdir, paste0(prefix, "_", name, ".svg"))
   grDevices::svg(filename = path, width = width, height = height)
-  print(p)
+  draw_plot(p)
   invisible(dev.off())
   cat("  Saved:", path, "\n")
   png_path <- sub("\\.svg$", ".png", path)
@@ -118,26 +141,51 @@ if (!is.null(ranked)) {
   skip("guide representation", "ranked")
 }
 
-# ---- 2. ECDF ----------------------------------------------------------------
-# The dashed vertical line is each sample's own mean read count — the count
-# every guide would have if reads were split perfectly evenly across the
-# library. It's the sample's own value (not a fixed cutoff) because total
-# depth varies between samples/pools, so only a sample's own mean is a fair
-# reference for it. This also makes the plot interpretable with a single
-# sample: without it, one lone curve has no reference point at all.
+# ---- 2. ECDF + mean read count per guide ------------------------------------
+# Two stacked panels sharing one log10 x axis: the ECDF curves (top) and, below,
+# one bar per sample = its mean read count per guide (zeros included), in the
+# same colour as its curve. The mean is the count every guide would have if
+# reads were split perfectly evenly across the library.
+sample_levels <- sort(unique(counts_long$sample))
+sample_cols <- setNames(scales::hue_pal()(length(sample_levels)), sample_levels)
 sample_means <- counts_long |> group_by(sample) |> summarize(mean_count = mean(count), .groups = "drop")
-p <- ggplot(counts_long, aes(x = count + 1, color = sample)) +
+sample_means$pos <- match(sample_means$sample, sample_levels)
+sample_means$pos <- length(sample_levels) + 1 - sample_means$pos # first sample at the top
+xl <- c(1, max(max(counts_long$count) + 1, max(sample_means$mean_count + 1) * 4))
+
+p1 <- ggplot(counts_long, aes(x = count + 1, color = sample)) +
   stat_ecdf(geom = "step", linewidth = 1.2) +
-  geom_vline(data = sample_means, aes(xintercept = mean_count + 1, color = sample),
-             linetype = "dashed", linewidth = 0.7, alpha = 0.8, show.legend = FALSE) +
-  scale_x_log10() +
+  scale_x_log10(limits = xl, expand = expansion(mult = c(0.02, 0.05))) +
+  scale_color_manual(values = sample_cols) +
   labs(
-    x = "gRNA Read Count + 1 (log10)", y = "Cumulative Fraction of gRNAs",
+    x = NULL, y = "Cumulative Fraction of gRNAs",
     title = paste("ECDF of gRNA Representation —\n", prefix)
   ) +
   my_theme +
-  centered_title
-save_plot(p, "ecdf", 8, 6)
+  centered_title +
+  theme(legend.position = "right")
+
+p2 <- ggplot(sample_means) +
+  geom_rect(aes(xmin = 1, xmax = mean_count + 1, ymin = pos - 0.35, ymax = pos + 0.35, fill = sample)) +
+  geom_text(aes(x = mean_count + 1, y = pos,
+                label = trimws(format(round(mean_count, 1), big.mark = ",", nsmall = 1))),
+            hjust = -0.1, size = 3.2) +
+  scale_x_log10(limits = xl, expand = expansion(mult = c(0.02, 0.05))) +
+  scale_y_continuous(breaks = sample_means$pos, labels = sample_means$sample,
+                     expand = c(0.03, 0.03)) +
+  scale_fill_manual(values = sample_cols, guide = "none") +
+  labs(x = "gRNA Read Count + 1 (log10)   (bars: mean read count per guide)", y = NULL) +
+  my_theme +
+  theme(legend.position = "none")
+
+g1 <- ggplotGrob(p1)
+g2 <- ggplotGrob(p2)
+g <- rbind(g1, g2, size = "max") # gtable method (gtable_rbind is not exported in this gtable version)
+panel_rows <- sort(g$layout$t[grepl("^panel", g$layout$name)])
+bar_in <- max(1.3, 0.22 * n_samples + 0.4)
+g$heights[panel_rows[1]] <- unit(4.5, "in")
+g$heights[panel_rows[2]] <- unit(bar_in, "in")
+save_plot(g, "ecdf", 8, 4.5 + bar_in + 2.4)
 
 # ---- 3. Lorenz curves -------------------------------------------------------
 lorenz <- read_table("lorenz")
@@ -334,18 +382,131 @@ if (!is.null(gc)) {
   skip("GC content vs depth", "gc_vs_depth")
 }
 
-# ---- 10. Replicate correlation heatmaps ------------------------------------
+# ---- 10. PCA of samples -----------------------------------------------------
+# Greedy deterministic label placement (no ggrepel): points sorted by x each
+# take the first of above / below / right / left (then diagonals, then
+# farther rings) whose label box overlaps no
+# box already placed (other labels, all points) and stays inside the axis
+# limits; otherwise the candidate with the least overlap.
+place_labels <- function(x, y, labels, xlim, ylim) {
+  xs <- diff(xlim); ys <- diff(ylim)
+  w <- nchar(labels) * 0.015 * xs
+  h <- 0.05 * ys
+  ox <- 0.025 * xs; oy <- 0.03 * ys
+  pr_x <- 0.012 * xs; pr_y <- 0.012 * ys
+  # boxes: xmin, xmax, ymin, ymax; all points are obstacles from the start
+  boxes <- cbind(x - pr_x, x + pr_x, y - pr_y, y + pr_y)
+  overlap <- function(b, others) {
+    if (nrow(others) == 0) return(0)
+    ow <- pmax(0, pmin(b[2], others[, 2]) - pmax(b[1], others[, 1]))
+    oh <- pmax(0, pmin(b[4], others[, 4]) - pmax(b[3], others[, 3]))
+    sum(ow * oh)
+  }
+  out <- data.frame(x = x, y = y, hjust = 0.5, vjust = 0, label = labels)
+  placed <- boxes[0, , drop = FALSE]
+  for (i in order(x, y)) {
+    # candidate anchors: above, below, right, left, then the four diagonals;
+    # tried at increasing distances (rings) from the point
+    cands <- list()
+    for (ring in c(1, 2.2, 3.6)) {
+      dx <- ox * ring; dy <- oy * ring
+      cands <- c(cands, list(
+        list(px = x[i],      py = y[i] + dy, hj = 0.5, vj = 0,
+             b = c(x[i] - w[i] / 2, x[i] + w[i] / 2, y[i] + dy, y[i] + dy + h)),
+        list(px = x[i],      py = y[i] - dy, hj = 0.5, vj = 1,
+             b = c(x[i] - w[i] / 2, x[i] + w[i] / 2, y[i] - dy - h, y[i] - dy)),
+        list(px = x[i] + dx, py = y[i],      hj = 0,   vj = 0.5,
+             b = c(x[i] + dx, x[i] + dx + w[i], y[i] - h / 2, y[i] + h / 2)),
+        list(px = x[i] - dx, py = y[i],      hj = 1,   vj = 0.5,
+             b = c(x[i] - dx - w[i], x[i] - dx, y[i] - h / 2, y[i] + h / 2)),
+        list(px = x[i] + dx, py = y[i] + dy, hj = 0,   vj = 0,
+             b = c(x[i] + dx, x[i] + dx + w[i], y[i] + dy, y[i] + dy + h)),
+        list(px = x[i] - dx, py = y[i] + dy, hj = 1,   vj = 0,
+             b = c(x[i] - dx - w[i], x[i] - dx, y[i] + dy, y[i] + dy + h)),
+        list(px = x[i] + dx, py = y[i] - dy, hj = 0,   vj = 1,
+             b = c(x[i] + dx, x[i] + dx + w[i], y[i] - dy - h, y[i] - dy)),
+        list(px = x[i] - dx, py = y[i] - dy, hj = 1,   vj = 1,
+             b = c(x[i] - dx - w[i], x[i] - dx, y[i] - dy - h, y[i] - dy))
+      ))
+    }
+    others <- rbind(boxes[-i, , drop = FALSE], placed)
+    score <- vapply(cands, function(cd) {
+      inside <- cd$b[1] >= xlim[1] && cd$b[2] <= xlim[2] && cd$b[3] >= ylim[1] && cd$b[4] <= ylim[2]
+      overlap(cd$b, others) + if (inside) 0 else 1e6 * xs * ys
+    }, numeric(1))
+    k <- which(score == 0)[1]
+    if (is.na(k)) k <- which.min(score)
+    cd <- cands[[k]]
+    out[i, c("x", "y", "hjust", "vjust")] <- c(cd$px, cd$py, cd$hj, cd$vj)
+    placed <- rbind(placed, cd$b)
+  }
+  out
+}
+
+pca <- read_table("pca")
+pca_var <- read_table("pca_variance")
+if (!is.null(pca) && !is.null(pca_var)) {
+  pc_lab <- function(pc) {
+    v <- pca_var$pct_variance[pca_var$PC == pc]
+    sprintf("%s (%.1f%% of variance)", pc, v)
+  }
+  pad <- function(r) {
+    d <- diff(r)
+    if (d == 0) d <- max(abs(r[1]), 1)
+    r + c(-1, 1) * 0.14 * d
+  }
+  pca_xlim <- pad(range(pca$PC1))
+  pca_ylim <- pad(range(pca$PC2))
+  lab_df <- place_labels(pca$PC1, pca$PC2, pca$sample, pca_xlim, pca_ylim)
+  lab_df$sample <- pca$sample
+  pca_levels <- sort(unique(pca$sample))
+  pca_cols <- setNames(scales::hue_pal()(length(pca_levels)), pca_levels)
+  p <- ggplot(pca, aes(x = PC1, y = PC2, color = sample)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +
+    geom_point(size = 3) +
+    geom_text(data = lab_df, aes(x = x, y = y, label = label, hjust = hjust, vjust = vjust),
+              size = 3.3, show.legend = FALSE) +
+    scale_color_manual(values = pca_cols, guide = "none") +
+    scale_x_continuous(limits = pca_xlim, expand = c(0, 0)) +
+    scale_y_continuous(limits = pca_ylim, expand = c(0, 0)) +
+    labs(
+      x = pc_lab("PC1"), y = pc_lab("PC2"),
+      title = paste("PCA of Sample Counts —\n", prefix)
+    ) +
+    my_theme +
+    centered_title
+  save_plot(p, "pca", 7, 6)
+} else {
+  skip("PCA", "pca")
+}
+
+# ---- 11. Replicate correlation heatmaps ------------------------------------
 cor_long <- read_table("replicate_correlations")
 if (!is.null(cor_long)) {
+  cor_order <- read_table("correlation_order")
+  sample_order <- if (!is.null(cor_order)) {
+    cor_order$sample[order(cor_order$order)]
+  } else {
+    sort(unique(c(cor_long$Sample_A, cor_long$Sample_B)))
+  }
   for (method in c("Pearson", "Spearman")) {
-    d <- cor_long |> rename(Correlation = all_of(method))
+    d <- cor_long |>
+      rename(Correlation = all_of(method)) |>
+      mutate(
+        Sample_A = factor(Sample_A, levels = sample_order),
+        Sample_B = factor(Sample_B, levels = rev(sample_order))
+      )
+    cor_lo <- min(0, min(d$Correlation, na.rm = TRUE))
+    cor_mid <- (cor_lo + 1) / 2
     p <- ggplot(d, aes(x = Sample_A, y = Sample_B, fill = Correlation)) +
-      geom_tile(color = "white", linewidth = 0.5) +
-      geom_text(aes(label = round(Correlation, 3)), size = 3.5) +
-      scale_fill_gradient2(
-        low = "firebrick", mid = "white", high = "steelblue", midpoint = 0.9,
-        limits = c(max(0, min(d$Correlation, na.rm = TRUE) - 0.02), 1),
-        name = paste(method, "\nCorrelation")
+      geom_tile(colour = "white", linewidth = 0.5) +
+      geom_text(aes(label = sprintf("%.2f", Correlation),
+                    colour = Correlation > cor_mid), size = 3.5, show.legend = FALSE) +
+      scale_colour_manual(values = c("FALSE" = "gray20", "TRUE" = "white")) +
+      scale_fill_gradient(
+        low = "#f7fbff", high = "#08519c", limits = c(cor_lo, 1),
+        name = paste(method, "\ncorrelation")
       ) +
       labs(title = paste(method, "Correlation —\n", prefix), x = NULL, y = NULL) +
       my_theme +
@@ -357,6 +518,49 @@ if (!is.null(cor_long)) {
   }
 } else {
   skip("replicate correlation", "replicate_correlations")
+}
+
+# ---- 12. Read depth ----------------------------------------------------------
+# geom_col has no valid baseline on a log axis, so bars are geom_rect from a
+# shared constant floor.
+read_depth <- read_table("read_depth")
+if (!is.null(read_depth)) {
+  cat_levels <- c("Total reads (sequenced)", "Reads matched to this library")
+  rd_pos <- data.frame(sample = read_depth$sample, pos = rev(seq_len(nrow(read_depth))))
+  rd_long <- read_depth |>
+    pivot_longer(c(total_reads, reads_matched_to_library), names_to = "category", values_to = "value") |>
+    mutate(category = factor(category, levels = c("total_reads", "reads_matched_to_library"),
+                             labels = cat_levels)) |>
+    filter(!is.na(value), value > 0) |>
+    left_join(rd_pos, by = "sample") |>
+    mutate(ymid = pos + ifelse(category == cat_levels[1], 0.2, -0.2))
+  if (nrow(rd_long) > 0) {
+    rd_min <- min(rd_long$value)
+    rd_floor <- if (rd_min < 10) 1 else 10^floor(log10(rd_min))
+    p <- ggplot(rd_long) +
+      geom_rect(aes(xmin = rd_floor, xmax = value, ymin = ymid - 0.18, ymax = ymid + 0.18, fill = category)) +
+      geom_text(aes(x = value, y = ymid, label = trimws(format(round(value), big.mark = ","))),
+                hjust = -0.1, size = 3) +
+      scale_x_log10(
+        limits = c(rd_floor, max(rd_long$value) * 6),
+        labels = short_label,
+        expand = expansion(mult = c(0, 0.02))
+      ) +
+      scale_y_continuous(breaks = rd_pos$pos, labels = rd_pos$sample, expand = c(0.03, 0.03)) +
+      scale_fill_manual(values = setNames(c("gray65", "steelblue"), cat_levels), drop = FALSE) +
+      labs(
+        x = "Reads (log10 scale)", y = NULL, fill = NULL,
+        title = paste("Read Depth per Sample —\n", prefix)
+      ) +
+      my_theme +
+      centered_title +
+      theme(legend.position = "bottom")
+    save_plot(p, "read_depth", 8, max(3.5, 0.7 * n_samples + 2))
+  } else {
+    cat("  [skip] read depth — no positive read counts\n")
+  }
+} else {
+  skip("read depth", "read_depth")
 }
 
 cat("\nGuide representation plots complete.\n")

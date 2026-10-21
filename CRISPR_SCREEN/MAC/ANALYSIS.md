@@ -46,7 +46,7 @@ the most recent successful run's.
 | QC | FastQC per sample, MultiQC summary, cutadapt-log metrics, barcode-position density (see below) | `fastqc:0.12.1`, `multiqc:1.34` |
 | Guide position | Automatic anchor discovery + trim (see below), unless `trim5` is set | `cutadapt:5.2` |
 | Count | `mageck count` | `mageck:0.5.9.5` |
-| Count QC | Guide representation, Lorenz/Gini, dropout, replicate correlation — computed once into tables, plotted as a separate step, then assembled into one HTML report per library | `rocker/tidyverse:4.3` |
+| Count QC | Guide representation, Lorenz/Gini, dropout, replicate correlation (clustered heatmaps), PCA, read depth and reads per guide — computed once into tables, plotted as a separate step, then assembled into one HTML report per library | `rocker/tidyverse:4.3` |
 | Test (optional) | `mageck test`, one task per contrast | `mageck:0.5.9.5` |
 | Methods | `METHODS.md` from the run's configuration, tool logs and probed tool versions (runs last, after all other steps) | each step's own image (versions); `cutadapt:5.2` (Python) |
 
@@ -137,6 +137,30 @@ sample losing a lot of real signal to sequencing error (high near-miss)
 looks very different from one that was never screened with this library at
 all (high far-miss).
 
+## Count QC: PCA, correlation ordering, read depth
+
+- **PCA** (`<prefix>_pca.svg/.png`; tables `<prefix>_pca.csv` and
+  `<prefix>_pca_variance.csv`): counts of the active samples are converted to
+  log2(CPM + 1), where CPM = count / the sample's total counts over the
+  library's guides x 10^6; guides with zero reads in every sample are removed;
+  `prcomp` is run centred, not scaled. Replicates of a condition should sit
+  together and the main separation should follow the biology (e.g. treatment or
+  time point), not batch or depth. Only drawn with at least 3 samples; the
+  comparison report has one panel per pool.
+- **Correlation heatmaps** (Pearson of log10(count + 1), Spearman of raw
+  counts) are ordered by hierarchical clustering (`hclust`, average linkage, on
+  1 - Pearson of log10(count + 1)) on a fixed 0-1 colour scale, so similar
+  samples sit next to each other; the order is saved in
+  `<prefix>_correlation_order.csv`.
+- **Read depth** (`<prefix>_read_depth.svg/.png`, `<prefix>_read_depth.csv`
+  with `sample`, `total_reads`, `reads_matched_to_library`) and
+  **reads per guide** (`reads_per_guide` in `qc_summary.csv` and the At a Glance
+  tables = reads matched to the library / number of guides). Rule of thumb: the
+  reads needed are about the number of guides x the desired reads per guide;
+  commonly at least 200-500 reads per guide at the endpoint, and often more for
+  plasmid / T0 samples. This is a guide, not a hard cutoff. The ECDF figure
+  also shows the mean read count per guide of each sample as bars.
+
 ## Output layout
 
 Every step's own `log/` subfolder below holds both its `.log` (what the
@@ -194,15 +218,20 @@ results/
 │       ├── tables/              every number behind the QC plots, as CSVs (Gini, Lorenz,
 │       │                         percentile ratio, undetected guides, mapping rate,
 │       │                         read classification (exact/near-miss/far-miss), GC vs
-│       │                         depth, replicate correlations, dropout, qc_summary);
+│       │                         depth, replicate correlations and their clustering order, PCA
+│       │                         scores/variance, read depth, dropout, qc_summary with
+│       │                         reads_per_guide);
 │       │                         with >1 library also <project_name>_library_breakdown.csv
 │       │                         / _wide.csv: % of each sample's reads per library
 │       │                         (the _wide file adds pct_any_library and main_library)
-│       ├── plots/               guide representation / Lorenz / ECDF / ... as SVG + PNG twin
-│       │   │                     (~150 dpi, same base name), drawn only from tables/
+│       ├── plots/               guide representation / Lorenz / ECDF (with a panel of mean reads
+│       │   │                     per guide) / PCA / correlation heatmaps / read depth / ...
+│       │   │                     as SVG + PNG twin (~150 dpi, same base name), drawn only
+│       │   │                     from tables/
 │       │   └── pools_comparison/  <project>_pools_<name>.svg/.png, only with more than one
 │       │                         library: guide representation, ECDF, Lorenz, density, controls,
-│       │                         GC, read class, library breakdown, and the bar charts of Gini,
+│       │                         GC, read class, library breakdown, PCA (one panel per pool),
+│       │                         read depth, and the bar charts of Gini,
 │       │                         90/10 ratio, % undetected and mapping %
 │       └── report/              <prefix>_qc_report.html — one self-contained page per
 │                                 library: every plot above, with a description, how to

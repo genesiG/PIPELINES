@@ -417,14 +417,14 @@ results/counts/*.count.txt                  raw sgRNA counts (count_normalized.t
 results/counts/*.unmapped.txt               reads mageck couldn't match to a guide, one column per sample
 results/counts/qc/anchor_discovery/         only when trim5 is unset (the default): the discovered anchor's
                                              full evidence trace, and per-sample anchor-found rates
-results/counts/qc/tables/                   every number behind the count QC plots; *_qc_summary.csv = one row per sample, with flags;
+results/counts/qc/tables/                   every number behind the count QC plots; *_qc_summary.csv = one row per sample, with flags and reads_per_guide; also PCA, read depth and correlation-order CSVs;
                                              with >1 library, <project_name>_library_breakdown*.csv = % of each sample's reads per library
-results/counts/qc/plots/                    guide representation, Lorenz/Gini, ECDF, mapping rate (= % exact
+results/counts/qc/plots/                    guide representation, Lorenz/Gini, ECDF, PCA, correlation heatmaps, read depth, mapping rate (= % exact
                                              match), read classification (exact/near-miss/far-miss), ...
                                              each as SVG + PNG (~150 dpi, same base name)
 results/counts/qc/plots/pools_comparison/   only with more than one library: <project_name>_pools_<name>.svg/.png
                                              (guide_rep, ecdf, lorenz, density, controls, gc, class, breakdown,
-                                             bar_Gini, bar_ratio_90_10, bar_pct_undetected, bar_mapping_pct;
+                                             bar_Gini, bar_ratio_90_10, bar_pct_undetected, bar_mapping_pct, pca, read_depth;
                                              some only when the data exist)
 results/counts/qc/report/                   <prefix>_qc_report.html — one page per library: every plot above with what it
                                              means, how to read it, and what to check if it looks poor. Start here.

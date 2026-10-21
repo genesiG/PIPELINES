@@ -5,7 +5,11 @@
 #' One HTML report comparing every library (pool) in this run side by side:
 #' the distributional plots faceted one panel per pool (3 columns), plus the
 #' headline scalar metrics (Gini, 90/10 ratio, % undetected, mapping rate) as
-#' combined bar charts across pools. Built only from the tables
+#' combined bar charts across pools (one full-width chart per metric, one facet
+#' per pool). Also: an ECDF figure with one block per pool (curves on top, mean
+#' read count per guide bars below), a PCA of samples per pool, and the total
+#' reads per sample. Every section is titled with the question it answers.
+#' Built only from the tables
 #' guide_representation_wrangle.R already wrote for each library — it never
 #' reads a count table directly or recomputes anything.
 #'
@@ -32,7 +36,8 @@
 #'
 #' OUTPUT: <project>_pools_comparison_qc_report.html (self-contained — every
 #' plot is embedded inline as SVG). Besides the HTML, each plot is also saved
-#' as SVG + PNG under <outdir>/pools_comparison/.
+#' as SVG + PNG under <outdir>/pools_comparison/ (<project>_pools_<plot>.svg/.png,
+#' e.g. _pools_bar_Gini, _pools_ecdf, _pools_pca, _pools_read_depth).
 #' ##########################################################################
 
 options(stringsAsFactors = FALSE)
@@ -75,6 +80,10 @@ html_escape <- function(x) {
   x
 }
 
+# A ggplot is print()ed; anything else (gtable/grid object) is drawn on a new page.
+draw_plot <- function(p) {
+  if (inherits(p, "ggplot")) print(p) else { grid::grid.newpage(); grid::grid.draw(p) }
+}
 # PNG twin of every SVG, for viewers that cannot render SVG (e.g. AI agents).
 # ragg (ships with the tidyverse image) if present, else base png() on cairo.
 save_png <- function(p, path, width, height, dpi = 150) {
@@ -83,7 +92,7 @@ save_png <- function(p, path, width, height, dpi = 150) {
   } else {
     grDevices::png(filename = path, width = width, height = height, units = "in", res = dpi, type = "cairo")
   }
-  print(p)
+  draw_plot(p)
   invisible(grDevices::dev.off())
 }
 
@@ -102,11 +111,11 @@ namespace_svg_ids <- function(svg_text, ns) {
   svg_text
 }
 
-# Renders a ggplot to SVG and returns it as a namespaced, embeddable string.
+# Renders a ggplot (or grob) to SVG and returns it as a namespaced, embeddable string.
 plot_to_svg <- function(p, ns, width, height) {
   tmp <- tempfile(fileext = ".svg")
   grDevices::svg(filename = tmp, width = width, height = height)
-  print(p)
+  draw_plot(p)
   invisible(grDevices::dev.off())
   raw <- paste(readLines(tmp, warn = FALSE), collapse = "\n")
   plots_dir <- file.path(outdir, "pools_comparison")
@@ -119,6 +128,19 @@ plot_to_svg <- function(p, ns, width, height) {
   end   <- regexpr("</svg>", raw)
   svg   <- substr(raw, start, end + attr(end, "match.length") - 1)
   namespace_svg_ids(svg, ns)
+}
+
+short_label <- function(x) {
+  out <- character(length(x))
+  for (i in seq_along(x)) {
+    v <- x[i]
+    out[i] <- if (is.na(v)) NA_character_
+      else if (abs(v) >= 1e9) paste0(format(v / 1e9, trim = TRUE, scientific = FALSE, digits = 3), "B")
+      else if (abs(v) >= 1e6) paste0(format(v / 1e6, trim = TRUE, scientific = FALSE, digits = 3), "M")
+      else if (abs(v) >= 1e3) paste0(format(v / 1e3, trim = TRUE, scientific = FALSE, digits = 3), "K")
+      else format(v, trim = TRUE, scientific = FALSE, digits = 3)
+  }
+  out
 }
 
 fmt_int <- function(x) ifelse(is.na(x), "—", format(round(x), big.mark = ",", scientific = FALSE))
@@ -166,6 +188,14 @@ ranked_all <- read_all("ranked")
 lorenz_all <- read_all("lorenz")
 gc_all     <- read_all("gc_vs_depth", required = FALSE)
 class_all  <- read_all("read_classification", required = FALSE)
+pca_all    <- read_all("pca", required = FALSE)
+pcavar_all <- read_all("pca_variance", required = FALSE)
+depth_all  <- read_all("read_depth", required = FALSE)
+
+# One colour per sample, shared by the ECDF and PCA figures (same sample, same
+# colour in every pool).
+all_samples <- sort(unique(counts_all$sample))
+sample_cols <- setNames(scales::hue_pal()(length(all_samples)), all_samples)
 
 breakdown_path <- file.path(tables_dir, paste0(project, "_library_breakdown.csv"))
 breakdown_all  <- if (file.exists(breakdown_path)) read.csv(breakdown_path, check.names = FALSE) else NULL
@@ -179,6 +209,7 @@ breakdown_real <- if (!is.null(breakdown_all)) breakdown_all[!(breakdown_all$lib
 all_vs_all <- !is.null(breakdown_real) && any(table(breakdown_real$sample) > 1)
 
 has_mapping <- "mapping_pct" %in% names(qc_all)
+has_rpg     <- "reads_per_guide" %in% names(qc_all)
 
 # One x-axis label per (pool, sample): just the pool name when it has a
 # single sample (the common case), "pool: sample" when it has several.
@@ -236,6 +267,7 @@ summary_rows <- paste0(
   "<td>", html_escape(qc_all$pool), "</td>",
   "<td>", html_escape(qc_all$sample), "</td>",
   if (has_mapping) paste0("<td class='num'>", fmt_pct(qc_all$mapping_pct), "</td>") else "",
+  if (has_rpg) paste0("<td class='num'>", fmt_num(qc_all$reads_per_guide, 1), "</td>") else "",
   "<td class='num'>", fmt_num(qc_all$Gini, 4), "</td>",
   "<td class='num'>", fmt_num(qc_all$ratio_90_10, 2), "</td>",
   "<td class='num'>", fmt_pct(qc_all$pct_undetected, 2), "</td>",
@@ -246,6 +278,7 @@ summary_rows <- paste0(
 summary_table <- paste0(
   "<table class='qc-table'><thead><tr><th>Pool</th><th>Sample</th>",
   if (has_mapping) "<th>Mapping % (Exact)</th>" else "",
+  if (has_rpg) "<th>Reads per Guide</th>" else "",
   "<th>Gini</th><th>90/10 Ratio</th><th>% Undetected</th><th>Flags</th>",
   "</tr></thead><tbody>", summary_rows, "</tbody></table>"
 )
@@ -267,20 +300,60 @@ svg_guide_rep <- {
   plot_to_svg(p, "cmp-guide-rep", facet_w, facet_h)
 }
 
-svg_ecdf <- {
-  # Dashed line: each sample's own mean read count (see guide_representation_plot.R
-  # for why a per-sample mean, not a fixed cutoff, is the right reference).
-  means <- counts_all |> group_by(pool, sample) |> summarize(mean_count = mean(count), .groups = "drop")
-  p <- ggplot(counts_all, aes(x = count + 1, color = sample)) +
+# One figure, one block per pool: ECDF curves on top and, below on the same
+# log10 x axis, one bar per sample = its mean read count per guide (zeros
+# included), coloured like its curve. The mean is the count every guide would
+# have if reads were split perfectly evenly. Blocks are gtables placed in a
+# facet_ncol-column grid of absolute sizes (no patchwork/cowplot needed).
+ecdf_block <- function(pl) {
+  d <- counts_all[counts_all$pool == pl, ]
+  smp <- sort(unique(d$sample))
+  m <- d |> group_by(sample) |> summarize(mean_count = mean(count), .groups = "drop")
+  m$pos <- length(smp) + 1 - match(m$sample, smp) # first sample at the top
+  xl <- c(1, max(max(d$count) + 1, max(m$mean_count + 1) * 4))
+  p1 <- ggplot(d, aes(x = count + 1, color = sample)) +
     stat_ecdf(geom = "step", linewidth = 0.9) +
-    geom_vline(data = means, aes(xintercept = mean_count + 1, color = sample),
-               linetype = "dashed", linewidth = 0.6, alpha = 0.8, show.legend = FALSE) +
-    scale_x_log10() +
-    facet_wrap(~pool, ncol = facet_ncol) +
-    labs(x = "gRNA Read Count + 1 (log10)", y = "Cumulative Fraction",
-         title = paste("ECDF by Pool —", project)) +
-    my_theme + centered + theme(legend.position = "bottom") + legend_guard
-  plot_to_svg(p, "cmp-ecdf", facet_w, facet_h + 0.6)
+    scale_x_log10(limits = xl, expand = expansion(mult = c(0.02, 0.05)),
+                  labels = short_label) +
+    scale_color_manual(values = sample_cols) +
+    labs(x = NULL, y = "Cumulative Fraction", title = pl) +
+    my_theme + centered + theme(legend.position = "none")
+  p2 <- ggplot(m) +
+    geom_rect(aes(xmin = 1, xmax = mean_count + 1, ymin = pos - 0.35, ymax = pos + 0.35, fill = sample)) +
+    geom_text(aes(x = mean_count + 1, y = pos,
+                  label = trimws(format(round(mean_count, 1), big.mark = ",", nsmall = 1))),
+              hjust = -0.1, size = 2.8) +
+    scale_x_log10(limits = xl, expand = expansion(mult = c(0.02, 0.05)),
+                  labels = short_label) +
+    scale_y_continuous(breaks = m$pos, labels = m$sample, expand = c(0.03, 0.03)) +
+    scale_fill_manual(values = sample_cols) +
+    labs(x = "Read Count + 1 (log10)", y = NULL) +
+    my_theme + theme(legend.position = "none")
+  g <- rbind(ggplotGrob(p1), ggplotGrob(p2), size = "max") # gtable method (gtable_rbind is not exported here)
+  panel_rows <- sort(g$layout$t[grepl("^panel", g$layout$name)])
+  g$heights[panel_rows[1]] <- unit(2.6, "in")
+  g$heights[panel_rows[2]] <- unit(max(1.1, 0.2 * length(smp) + 0.4), "in")
+  g
+}
+svg_ecdf <- {
+  blocks <- lapply(pools, ecdf_block)
+  # Total height of each block in inches (absolute panel heights + text rows).
+  grDevices::pdf(NULL)
+  blk_h <- vapply(blocks, function(g) grid::convertHeight(sum(g$heights), "in", valueOnly = TRUE), numeric(1))
+  invisible(grDevices::dev.off())
+  ecdf_rows <- ceiling(n_pools / facet_ncol)
+  row_h <- vapply(seq_len(ecdf_rows), function(r) max(blk_h[((r - 1) * facet_ncol + 1):min(r * facet_ncol, n_pools)]), numeric(1))
+  col_w <- rep(3.6, facet_ncol)
+  title_h <- 0.45
+  outer <- gtable::gtable(widths = unit(col_w, "in"), heights = unit(c(title_h, row_h), "in"))
+  outer <- gtable::gtable_add_grob(outer,
+    grid::textGrob(paste("ECDF by Pool —", project), gp = grid::gpar(fontface = "bold", fontsize = 12)),
+    t = 1, l = 1, r = facet_ncol, name = "title")
+  for (i in seq_len(n_pools)) {
+    outer <- gtable::gtable_add_grob(outer, blocks[[i]],
+      t = 1 + ceiling(i / facet_ncol), l = ((i - 1) %% facet_ncol) + 1, clip = "off", name = paste0("block", i))
+  }
+  plot_to_svg(outer, "cmp-ecdf", sum(col_w), title_h + sum(row_h))
 }
 
 svg_lorenz <- {
@@ -356,8 +429,8 @@ svg_class <- if (!is.null(class_all)) {
     facet_wrap(~pool, ncol = facet_ncol) +
     labs(x = NULL, y = "% of Reads", fill = NULL,
          title = paste("Read Classification by Pool —", project)) +
-    my_theme + centered + theme(legend.position = "bottom", axis.text.x = element_text(angle = 35, hjust = 1))
-  plot_to_svg(p, "cmp-class", facet_w, facet_h + 0.8)
+    my_theme + centered + theme(legend.position = "bottom", axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  plot_to_svg(p, "cmp-class", facet_w, facet_h + 1.4)
 } else NULL
 
 # ---- Reads per library (bin/library_breakdown.py) --------------------------
@@ -425,26 +498,182 @@ if (!is.null(breakdown_all)) {
 
 # ---- Headline metrics: combined bar charts (one bar per pool/sample) ------
 bar_compare <- function(y, y_lab, title, hline_good = NULL, hline_flag = NULL) {
-  p <- ggplot(qc_all, aes(x = x_label, y = .data[[y]], fill = pool)) +
+  p <- ggplot(qc_all, aes(x = sample, y = .data[[y]], fill = pool)) +
     geom_col(width = 0.7)
   if (!is.null(hline_good)) p <- p + geom_hline(yintercept = hline_good, linetype = "dashed", color = "forestgreen", linewidth = 0.7)
   if (!is.null(hline_flag)) p <- p + geom_hline(yintercept = hline_flag, linetype = "dashed", color = "firebrick", linewidth = 0.7)
-  p <- p + labs(x = NULL, y = y_lab, title = title) + my_theme + angled + theme(legend.position = "none")
-  plot_to_svg(p, paste0("cmp-bar-", y), max(6, n_pools * 0.9 + 1.5), 4.6)
+  p <- p + facet_grid(. ~ pool, scales = "free_x", space = "free_x") +
+    labs(x = NULL, y = y_lab, title = title) + my_theme + centered +
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+          strip.text.x = element_text(size = 10, face = "bold"),
+          panel.spacing = unit(0.3, "lines"))
+  plot_to_svg(p, paste0("cmp-bar-", y), max(8, 0.32 * nrow(qc_all) + 2.5 + 0.35 * n_pools), 5.2)
 }
 svg_gini  <- bar_compare("Gini", "Gini Coefficient", "Gini by Pool")
 svg_ratio <- bar_compare("ratio_90_10", "90/10 Ratio", "Library Skew by Pool", hline_good = 5, hline_flag = 10)
 svg_undet <- bar_compare("pct_undetected", "% Undetected", "Undetected Guides by Pool", hline_good = 1, hline_flag = 5)
 svg_map   <- if (has_mapping) bar_compare("mapping_pct", "% Mapped (Exact)", "Mapping Rate / % Exact Match by Pool", hline_flag = 30) else NULL
 
+# ---- PCA of samples, one panel per pool -------------------------------------
+# Greedy deterministic label placement (no ggrepel), same helper as
+# guide_representation_plot.R: points sorted by x each take the first of
+# above / below / right / left (then diagonals, then farther rings) whose label
+# box overlaps no box already placed (other labels, all points) and stays
+# inside the axis limits; otherwise the candidate with the least overlap.
+place_labels <- function(x, y, labels, xlim, ylim) {
+  xs <- diff(xlim); ys <- diff(ylim)
+  w <- nchar(labels) * 0.015 * xs
+  h <- 0.05 * ys
+  ox <- 0.025 * xs; oy <- 0.03 * ys
+  pr_x <- 0.012 * xs; pr_y <- 0.012 * ys
+  # boxes: xmin, xmax, ymin, ymax; all points are obstacles from the start
+  boxes <- cbind(x - pr_x, x + pr_x, y - pr_y, y + pr_y)
+  overlap <- function(b, others) {
+    if (nrow(others) == 0) return(0)
+    ow <- pmax(0, pmin(b[2], others[, 2]) - pmax(b[1], others[, 1]))
+    oh <- pmax(0, pmin(b[4], others[, 4]) - pmax(b[3], others[, 3]))
+    sum(ow * oh)
+  }
+  out <- data.frame(x = x, y = y, hjust = 0.5, vjust = 0, label = labels)
+  placed <- boxes[0, , drop = FALSE]
+  for (i in order(x, y)) {
+    # candidate anchors: above, below, right, left, then the four diagonals;
+    # tried at increasing distances (rings) from the point
+    cands <- list()
+    for (ring in c(1, 2.2, 3.6)) {
+      dx <- ox * ring; dy <- oy * ring
+      cands <- c(cands, list(
+        list(px = x[i],      py = y[i] + dy, hj = 0.5, vj = 0,
+             b = c(x[i] - w[i] / 2, x[i] + w[i] / 2, y[i] + dy, y[i] + dy + h)),
+        list(px = x[i],      py = y[i] - dy, hj = 0.5, vj = 1,
+             b = c(x[i] - w[i] / 2, x[i] + w[i] / 2, y[i] - dy - h, y[i] - dy)),
+        list(px = x[i] + dx, py = y[i],      hj = 0,   vj = 0.5,
+             b = c(x[i] + dx, x[i] + dx + w[i], y[i] - h / 2, y[i] + h / 2)),
+        list(px = x[i] - dx, py = y[i],      hj = 1,   vj = 0.5,
+             b = c(x[i] - dx - w[i], x[i] - dx, y[i] - h / 2, y[i] + h / 2)),
+        list(px = x[i] + dx, py = y[i] + dy, hj = 0,   vj = 0,
+             b = c(x[i] + dx, x[i] + dx + w[i], y[i] + dy, y[i] + dy + h)),
+        list(px = x[i] - dx, py = y[i] + dy, hj = 1,   vj = 0,
+             b = c(x[i] - dx - w[i], x[i] - dx, y[i] + dy, y[i] + dy + h)),
+        list(px = x[i] + dx, py = y[i] - dy, hj = 0,   vj = 1,
+             b = c(x[i] + dx, x[i] + dx + w[i], y[i] - dy - h, y[i] - dy)),
+        list(px = x[i] - dx, py = y[i] - dy, hj = 1,   vj = 1,
+             b = c(x[i] - dx - w[i], x[i] - dx, y[i] - dy - h, y[i] - dy))
+      ))
+    }
+    others <- rbind(boxes[-i, , drop = FALSE], placed)
+    score <- vapply(cands, function(cd) {
+      inside <- cd$b[1] >= xlim[1] && cd$b[2] <= xlim[2] && cd$b[3] >= ylim[1] && cd$b[4] <= ylim[2]
+      overlap(cd$b, others) + if (inside) 0 else 1e6 * xs * ys
+    }, numeric(1))
+    k <- which(score == 0)[1]
+    if (is.na(k)) k <- which.min(score)
+    cd <- cands[[k]]
+    out[i, c("x", "y", "hjust", "vjust")] <- c(cd$px, cd$py, cd$hj, cd$vj)
+    placed <- rbind(placed, cd$b)
+  }
+  out
+}
+
+svg_pca <- if (!is.null(pca_all) && !is.null(pcavar_all) && nrow(pca_all) > 0) {
+  pad <- function(r) {
+    d <- diff(r)
+    if (d == 0) d <- max(abs(r[1]), 1)
+    r + c(-1, 1) * 0.22 * d
+  }
+  pca_pools <- pools[pools %in% pca_all$pool]
+  lab_list <- list(); blank_list <- list(); pt_list <- list()
+  for (pl in pca_pools) {
+    d <- pca_all[pca_all$pool == pl, ]
+    v <- pcavar_all[pcavar_all$pool == pl, ]
+    v1 <- v$pct_variance[v$PC == "PC1"][1]; v2 <- v$pct_variance[v$PC == "PC2"][1]
+    lbl <- paste0(pl, "\nPC1 ", sprintf("%.1f", v1), "%, PC2 ", sprintf("%.1f", v2), "%")
+    xlim <- pad(range(d$PC1)); ylim <- pad(range(d$PC2))
+    ld <- place_labels(d$PC1, d$PC2, d$sample, xlim, ylim)
+    ld$sample <- d$sample; ld$pool_label <- lbl
+    lab_list[[pl]] <- ld
+    blank_list[[pl]] <- data.frame(PC1 = xlim, PC2 = ylim, pool_label = lbl)
+    d$pool_label <- lbl
+    pt_list[[pl]] <- d
+  }
+  lab_df <- dplyr::bind_rows(lab_list); blank_df <- dplyr::bind_rows(blank_list); pt_df <- dplyr::bind_rows(pt_list)
+  lvls <- unique(pt_df$pool_label)
+  lab_df$pool_label <- factor(lab_df$pool_label, levels = lvls)
+  blank_df$pool_label <- factor(blank_df$pool_label, levels = lvls)
+  pt_df$pool_label <- factor(pt_df$pool_label, levels = lvls)
+  p <- ggplot(pt_df, aes(x = PC1, y = PC2, color = sample)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +
+    geom_blank(data = blank_df, aes(x = PC1, y = PC2), inherit.aes = FALSE) +
+    geom_point(size = 2.5) +
+    geom_text(data = lab_df, aes(x = x, y = y, label = label, hjust = hjust, vjust = vjust),
+              size = 2.8, show.legend = FALSE) +
+    scale_color_manual(values = sample_cols, guide = "none") +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    facet_wrap(~pool_label, scales = "free", ncol = facet_ncol) +
+    labs(x = "PC1", y = "PC2", title = paste("PCA of Samples by Pool —", project)) +
+    my_theme + centered
+  plot_to_svg(p, "cmp-pca", facet_w, facet_h + 0.4)
+} else NULL
+
+# ---- Read depth per sample ---------------------------------------------------
+# Total reads per sample: from the library breakdown if present, else the
+# qc_summary reads column, else the read_depth tables.
+depth_df <- NULL
+one_per_sample <- function(smp, tot) {
+  tot <- suppressWarnings(as.numeric(tot))
+  ok <- !is.na(tot)
+  if (!any(ok)) return(NULL)
+  d <- data.frame(sample = smp[ok], reads = tot[ok])
+  d <- d |> group_by(sample) |> summarize(reads = max(reads), .groups = "drop")
+  d[match(unique(smp[ok]), d$sample), ]
+}
+if (!is.null(breakdown_all) && "reads" %in% names(breakdown_all)) depth_df <- one_per_sample(breakdown_all$sample, breakdown_all$reads)
+if (is.null(depth_df) && "reads" %in% names(qc_all)) depth_df <- one_per_sample(qc_all$sample, qc_all$reads)
+if (is.null(depth_df) && !is.null(depth_all) && "total_reads" %in% names(depth_all)) depth_df <- one_per_sample(depth_all$sample, depth_all$total_reads)
+if (!is.null(depth_df)) depth_df <- depth_df[depth_df$reads > 0, ]
+svg_depth <- if (!is.null(depth_df) && nrow(depth_df) > 0) {
+  n <- nrow(depth_df)
+  depth_df$pos <- n + 1 - seq_len(n) # first sample at the top
+  xmin_d <- 10^floor(log10(min(depth_df$reads)))
+  p <- ggplot(depth_df) +
+    geom_rect(aes(xmin = xmin_d, xmax = reads, ymin = pos - 0.35, ymax = pos + 0.35), fill = "steelblue") +
+    geom_text(aes(x = reads, y = pos, label = format(round(reads), big.mark = ",")), hjust = -0.1, size = 3.2) +
+    scale_x_log10(labels = short_label,
+                  expand = expansion(mult = c(0, 0.15))) +
+    scale_y_continuous(breaks = depth_df$pos, labels = depth_df$sample, expand = c(0.02, 0.02)) +
+    labs(x = "Total Reads (log10)", y = NULL, title = paste("Read Depth per Sample —", project)) +
+    my_theme + centered
+  plot_to_svg(p, "cmp-read-depth", 9, max(4, 0.28 * n + 1.8))
+} else NULL
+
 # ---- Sections ---------------------------------------------------------------
 plot_div <- function(svg) paste0("<div class='plot-row'><div class='plot plot-wide'>", svg, "</div></div>")
 missing_div <- function(reason) paste0("<div class='missing-box'><strong>Not generated.</strong> ", reason, "</div>")
 
-section <- function(id, title, description, body, interpretation, troubleshooting) {
+# Each section is titled with the question it answers (num. question) and keeps
+# its old name as a subtitle. c(question, subtitle) per section id.
+sec_head <- list(
+  breakdown = c("0. Which library does each sample's DNA belong to, and what share of its reads matches no library?", "Reads per Library"),
+  headline = c("1. Do any pools stand out on the key quality numbers?", "Headline Metrics"),
+  guide_representation = c("2. Are each pool's guides represented evenly in each sample?", "Guide Representation (Ranked)"),
+  ecdf = c("3. What fraction of each pool's guides received few reads, and how deep is each sample on average?", "ECDF of gRNA Representation"),
+  lorenz = c("4. How unequally are reads shared among each pool's guides?", "Lorenz Curves"),
+  density = c("5. Do each pool's guides form one population or several (e.g. a dropout group near zero)?", "Read-Count Density"),
+  controls = c("6. Do control guides behave differently from targeting guides in each pool?", "Control vs Targeting gRNA Representation"),
+  class = c("7. Why didn't the other reads match a guide: sequencing errors or unrelated sequences?", "Read Classification: Exact / Near-Miss / Far-Miss"),
+  gc = c("8. Does a guide's GC content bias how many reads it gets?", "GC Content vs Read Depth"),
+  pca = c("9. Which samples resemble each other overall in each pool, and do replicates group together?", "Principal Component Analysis (PCA) by Pool"),
+  depth = c("10. Was each sample sequenced deeply enough?", "Read Depth per Sample")
+)
+
+section <- function(id, description, body, interpretation, troubleshooting) {
   troubleshooting_html <- if (grepl("<li>", troubleshooting, fixed = TRUE)) paste0("<ul>", troubleshooting, "</ul>") else paste0("<p>", troubleshooting, "</p>")
   paste0(
-    "<section id='", id, "'>", "<h2>", title, "</h2>", "<p class='desc'>", description, "</p>", body,
+    "<section id='", id, "'>", "<h2>", html_escape(sec_head[[id]][1]), "</h2>",
+    "<p class='subtitle'>", html_escape(sec_head[[id]][2]), "</p>", "<p class='desc'>", description, "</p>", body,
     "<div class='callout callout-interp'><h3>How to interpret it</h3><p>", interpretation, "</p></div>",
     "<div class='callout callout-trouble'><h3>If one pool looks off</h3>", troubleshooting_html, "</div>",
     "</section>"
@@ -453,7 +682,7 @@ section <- function(id, title, description, body, interpretation, troubleshootin
 
 sections_html <- paste(c(
   if (!is.null(breakdown_html)) {
-    section("breakdown", "0. Reads per Library", paste0("For every sample: the share of its reads that match a guide of each library it was counted against, and the share matching no library at all. A read matching a guide shared by several libraries counts once in &ldquo;Any library&rdquo;. With no <code>library</code> column in <code>samplesheet.csv</code>, every sample is counted against every library, so this shows which pool(s) each sample really holds. Numbers: <code>results/counts/qc/tables/", project, "_library_breakdown.csv</code> (one row per sample &times; library) and <code>_library_breakdown_wide.csv</code> (one row per sample)."),
+    section("breakdown", paste0("For every sample: the share of its reads that match a guide of each library it was counted against, and the share matching no library at all. A read matching a guide shared by several libraries counts once in &ldquo;Any library&rdquo;. With no <code>library</code> column in <code>samplesheet.csv</code>, every sample is counted against every library, so this shows which pool(s) each sample really holds. Numbers: <code>results/counts/qc/tables/", project, "_library_breakdown.csv</code> (one row per sample &times; library) and <code>_library_breakdown_wide.csv</code> (one row per sample)."),
       breakdown_html,
       paste0(r"(A sample screened with one pool shows one dominant colour (its main library, in bold in the
       table) and little else. Several sizeable colours mean the sample holds a mix of pools. A sample
@@ -468,13 +697,9 @@ sections_html <- paste(c(
       <li>&ldquo;0% (not in table)&rdquo;: the sample had no read of that library, so it was left out of that
       library's count table (only done when every sample is counted against every library).</li>)")
   },
-  section("headline", "1. Headline Metrics", "The four numbers behind each pool's flags, one bar chart per metric across every pool. Dashed lines mark the same good/flagged thresholds used throughout this report.",
-    paste0("<div class='plot-row'>",
-           "<div class='plot'>", svg_gini, "</div>",
-           "<div class='plot'>", svg_ratio, "</div>",
-           "<div class='plot'>", svg_undet, "</div>",
-           if (!is.null(svg_map)) paste0("<div class='plot'>", svg_map, "</div>") else "",
-           "</div>"),
+  section("headline", "The four numbers behind each pool's flags, one bar chart per metric (one panel per pool, one bar per sample). Dashed lines mark the same good/flagged thresholds used throughout this report.",
+    paste0(plot_div(svg_gini), plot_div(svg_ratio), plot_div(svg_undet),
+           if (!is.null(svg_map)) plot_div(svg_map) else ""),
     paste0("A pool above the flagged line on any of these has that specific problem — see that metric's own section below for what it means and what to check.",
            if (all_vs_all) paste0(" ", aa_note_map) else ""),
     r"(<li>A pool flagged on several metrics at once usually indicates a labeling or sample mix-up
@@ -483,7 +708,7 @@ sections_html <- paste(c(
     dropout: it usually means that sample wasn't actually screened with this library, rather than
     its guides genuinely failing one by one.</li>)"),
 
-  section("guide_representation", "2. Guide Representation (Ranked)", "Each panel shows one pool's guides, sorted from lowest to highest mean CPM. Each guide's value is its mean counts per million reads (CPM) across the pool's samples, which puts samples of different depth on one scale.",
+  section("guide_representation", "Each panel shows one pool's guides, sorted from lowest to highest mean CPM. Each guide's value is its mean counts per million reads (CPM) across the pool's samples, which puts samples of different depth on one scale.",
     plot_div(svg_guide_rep),
     r"(A steep drop at the low-rank end of a panel indicates a subset of that pool's guides are
     barely present or missing. A steep rise concentrated at the high-rank end indicates a small
@@ -494,18 +719,21 @@ sections_html <- paste(c(
     <li>A drop already present at T0/plasmid indicates a library or transduction coverage problem
     specific to that pool.</li>)"),
 
-  section("ecdf", "3. ECDF of gRNA Representation", "Each panel shows one pool's cumulative fraction of guides at or below a given read count. The dashed line marks that pool's mean read count — what every guide would have if reads were split perfectly evenly.",
+  section("ecdf", "One block per pool. Top: the cumulative fraction of that pool's guides at or below a given read count, one curve per sample. Bottom: one bar per sample showing its mean read count per guide (zeros included) on the same axis &mdash; what every guide would have if reads were split perfectly evenly. Bars and curves share the sample's colour and the bar value is printed at its end.",
     plot_div(svg_ecdf),
-    "The more of a panel's curve sitting to the left of its mean line, the larger the fraction of that pool's guides falling below their fair share of reads.",
-    r"(<li>A wide gap between a pool's curve and its mean line indicates that pool needs closer
-    attention — cross-check its mapping rate and % undetected in the headline metrics above.</li>)"),
+    "Compare a curve with its bar below: the more of the curve sitting to the left of the end of its bar, the larger the fraction of that pool's guides falling below their fair share of reads. A short bar means the sample is shallow for that pool (few reads per guide); bars of very different length between replicates mean uneven depth.",
+    r"(<li>A curve that rises far to the left of its bar end indicates that pool needs closer
+    attention — cross-check its mapping rate and % undetected in the headline metrics above.</li>
+    <li>A bar far shorter than the others in the same pool: that sample has few reads per guide in
+    this pool (shallow, or mostly from another pool in all-vs-all mode) — see the Reads per Library and
+    Read Depth sections.</li>)"),
 
-  section("lorenz", "4. Lorenz Curves", "Each panel shows cumulative % of reads against cumulative % of guides for one pool. The diagonal represents an ideal pool with perfectly even representation.",
+  section("lorenz", "Each panel shows cumulative % of reads against cumulative % of guides for one pool. The diagonal represents an ideal pool with perfectly even representation.",
     plot_div(svg_lorenz),
     "The further a panel's curve bows away from the diagonal, the less evenly that pool's guides are represented — that pool's Gini coefficient in the headline metrics above will be higher too.",
     "<li>Confirm that pool's 90/10 ratio above agrees with what the curve shows.</li>"),
 
-  section("density", "5. Read-Count Density", "Each panel shows the read-count distribution for one pool.",
+  section("density", "Each panel shows the read-count distribution for one pool.",
     plot_div(svg_density),
     r"(A single, smooth peak in a panel is the ideal case. A second peak near zero read counts
     indicates gRNA dropout in that pool; the height of that peak reflects severity — a small bump
@@ -521,18 +749,18 @@ sections_html <- paste(c(
     samplesheet.csv assignment for a possible sample mix-up.</li>)"),
 
   if (!is.null(svg_controls)) {
-    section("controls", "6. Control vs Targeting gRNA Representation", "For pools with control/NTC/non-targeting guides: control vs targeting read-count distributions, one panel per pool.",
+    section("controls", "For pools with control/NTC/non-targeting guides: control vs targeting read-count distributions, one panel per pool.",
       plot_div(svg_controls),
       "Divergence between a panel's two curves already present at a reference/T0 timepoint indicates a technical difference between how that pool's controls and targeting guides were made, not biology.",
       "<li>Compare a pool's own T0/plasmid panel against its treated timepoint, if this run has both.</li>")
   } else {
-    section("controls", "6. Control vs Targeting gRNA Representation", "For pools with control/NTC/non-targeting guides: control vs targeting read-count distributions, one panel per pool.",
+    section("controls", "For pools with control/NTC/non-targeting guides: control vs targeting read-count distributions, one panel per pool.",
       missing_div("None of this run's libraries have control, NTC, or non-targeting guides in their Gene column."),
       "", "")
   },
 
   if (!is.null(svg_class)) {
-    section("class", "7. Read Classification: Exact / Near-Miss / Far-Miss", "Every pool's reads, split into exact matches (= that pool's Mapping Rate above), near-misses (1 substitution from a guide), and far-misses (not close to any guide), one panel per pool.",
+    section("class", "Every pool's reads, split into exact matches (= that pool's Mapping Rate above), near-misses (1 substitution from a guide), and far-misses (not close to any guide), one panel per pool.",
       plot_div(svg_class),
       r"(A large exact-match share with little near- or far-miss is the ideal case. A pool with a
       substantial near-miss share is losing real signal to sequencing/PCR error &mdash; those reads
@@ -545,13 +773,13 @@ sections_html <- paste(c(
       <li>A pool that's mostly far-miss: check the Undetected Guides and Mapping Rate bars for that
       pool in the headline metrics above — the same signal, another angle.</li>)")
   } else {
-    section("class", "7. Read Classification: Exact / Near-Miss / Far-Miss", "Every pool's reads, split into exact matches, near-misses, and far-misses, one panel per pool.",
+    section("class", "Every pool's reads, split into exact matches, near-misses, and far-misses, one panel per pool.",
       missing_div("None of this run's libraries had a usable combination of library sequences, mageck log, and unmapped-reads file to classify reads with."),
       "", "")
   },
 
   if (!is.null(svg_gc)) {
-    section("gc", "8. GC Content vs Read Depth", "Guide GC content vs. normalized read count, one panel per pool.",
+    section("gc", "Guide GC content vs. normalized read count, one panel per pool.",
       plot_div(svg_gc),
       r"(A flat trend line is the ideal case. The steeper a monotonic slope, the stronger the
       GC-dependent amplification bias for that pool. A U-shaped or dome-shaped trend &mdash; dipping
@@ -564,16 +792,39 @@ sections_html <- paste(c(
       <li>mageck's normalization doesn't correct for GC bias, so it's worth noting even when it
       doesn't invalidate the screen.</li>)")
   } else {
-    section("gc", "8. GC Content vs Read Depth", "Guide GC content vs. normalized read count, one panel per pool.",
+    section("gc", "Guide GC content vs. normalized read count, one panel per pool.",
       missing_div("None of this run's libraries had the guide id/sequence columns needed to compute GC content."),
+      "", "")
+  },
+
+  if (!is.null(svg_pca)) {
+    section("pca", "One panel per pool, one point per sample. Each pool's PCA uses log2(counts per million + 1) of that pool's guides, centred but not scaled; PC1 is plotted against PC2 and the percentage of variance each explains is in the panel title. Pools with fewer than 3 samples with reads in them are left out (no PCA).",
+      plot_div(svg_pca),
+      paste0("Points close together have similar guide profiles; replicates should cluster. Separation along PC1 by condition or timepoint is expected after selection. A sample far from its replicates is suspect.",
+             if (all_vs_all) " In all-vs-all mode every sample is counted against every pool, so samples that belong to other pools have very few reads in a pool and dominate or separate in that pool's PCA &mdash; read it together with section 0 (Reads per Library)." else ""),
+      "<li>A sample far from its replicates: check its mapping rate and depth in the sections above, and its row in <code>samplesheet.csv</code>.</li>")
+  } else {
+    section("pca", "One panel per pool, one point per sample (PCA of log2 counts per million of that pool's guides).",
+      missing_div("No pool had at least 3 samples with reads in it, or the PCA tables were not found."),
+      "", "")
+  },
+
+  if (!is.null(svg_depth)) {
+    section("depth", "One bar per sample: its total sequenced reads, on a log10 axis, with the number at the end of the bar. The reads you need are roughly the number of guides times the reads per guide you want. A common rule of thumb is at least 200-500 reads per guide at the end point of a screen (plasmid/T0 samples often need more). The Reads per Guide column in At a Glance gives each pool's matched reads per guide (matched reads / guides). This is a rule of thumb, not a hard cutoff.",
+      plot_div(svg_depth),
+      "Samples of similar depth are directly comparable. A sample far below the others, or below guides x coverage, has noisy counts for many guides.",
+      r"(<li>A sample far below the others (or below guides &times; the coverage you need): too shallow, so noisy counts &mdash; consider re-sequencing it.</li>
+      <li>Very uneven depth between replicates lowers their correlation; compare with the PCA above.</li>)")
+  } else {
+    section("depth", "One bar per sample: its total sequenced reads.",
+      missing_div("No total read counts were found (no library breakdown, no reads column in the qc summaries, no read_depth tables)."),
       "", "")
   }
 ), collapse = "\n")
 
-toc_ids    <- c(if (!is.null(breakdown_html)) "breakdown", "headline", "guide_representation", "ecdf", "lorenz", "density", "controls", "class", "gc")
-toc_titles <- c(if (!is.null(breakdown_html)) "0. Reads per Library", "1. Headline Metrics", "2. Guide Representation", "3. ECDF", "4. Lorenz Curves", "5. Read-Count Density",
-                "6. Control vs Targeting", "7. Read Classification", "8. GC Content vs Read Depth")
-toc_items  <- paste0("<li><a href='#", toc_ids, "'>", toc_titles, "</a></li>", collapse = "\n")
+toc_ids    <- c(if (!is.null(breakdown_html)) "breakdown", "headline", "guide_representation", "ecdf", "lorenz", "density", "controls", "class", "gc", "pca", "depth")
+toc_titles <- vapply(toc_ids, function(i) sec_head[[i]][1], character(1))
+toc_items  <- paste0("<li><a href='#", toc_ids, "'>", html_escape(toc_titles), "</a></li>", collapse = "\n")
 
 # ---- Assemble the page -------------------------------------------------------
 css <- r"(
@@ -598,6 +849,7 @@ nav.toc ul { columns: 2; margin: 0; padding-left: 1.2rem; }
 nav.toc a { color: var(--accent); text-decoration: none; }
 nav.toc a:hover { text-decoration: underline; }
 h2 { font-size: 1.3rem; margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
+.subtitle { margin: -0.3rem 0 1rem; font-size: 0.95rem; color: var(--muted); font-weight: 400; }
 .desc { color: #333; }
 .plot-row { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; margin: 1rem 0; }
 .plot { flex: 1 1 300px; max-width: 100%; text-align: center; }
@@ -642,7 +894,7 @@ html <- paste0(
   "correlation is the one thing left out here, since it can't be compared meaningfully across ",
   "pools that used different guides — see a pool's own report for that.</div>",
   "<nav class='toc'><h2>Sections</h2><ul>", toc_items, "</ul></nav>",
-  "<section id='summary'><h2>At a Glance</h2>", summary_table,
+  "<section id='summary'><h2>How does each sample look overall, and which ones need attention?</h2><p class='subtitle'>At a Glance</p>", summary_table,
   if (all_vs_all) paste0("<p class='desc'>", aa_note_glance, "</p>") else "",
   "</section>",
   sections_html,

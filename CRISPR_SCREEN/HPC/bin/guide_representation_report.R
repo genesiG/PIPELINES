@@ -5,8 +5,11 @@
 #' Assembles one self-contained HTML QC report per library from the tables
 #' guide_representation_wrangle.R wrote and the SVGs guide_representation_plot.R
 #' rendered from them. For every plot: what it measures, how to read it, and
-#' what to check next if it looks poor. No statistics are computed here —
-#' this only reads existing tables/plots and writes HTML.
+#' what to check next if it looks poor. Every section opens with the plain-language
+#' question it answers (the plot name is the subtitle under it). Sections: guide
+#' representation, ECDF, Lorenz, density, controls, 90/10, undetected, mapping, read
+#' classification, GC, sample correlation heatmaps, PCA and read depth.
+#' No statistics are computed here — this only reads existing tables/plots and writes HTML.
 #'
 #' USAGE:
 #'   Rscript guide_representation_report.R --tables-dir=<dir> --plots-dir=<dir> \
@@ -122,6 +125,7 @@ one_sample   <- n_samples == 1
 has_mapping  <- "mapping_pct" %in% names(qc)
 low_mapping  <- if (has_mapping) qc$mapping_pct < 30 else rep(FALSE, nrow(qc))
 has_class    <- "pct_near_miss" %in% names(qc)
+has_rpg      <- "reads_per_guide" %in% names(qc)
 
 # ---- Optional library breakdown (bin/library_breakdown.py, wide file) ------
 # Used in all-vs-all runs (several libraries, no samplesheet library column),
@@ -178,6 +182,7 @@ summary_rows <- paste0(
   "<tr>",
   "<td>", html_escape(qc$sample), "</td>",
   if (has_mapping) paste0("<td class='num'>", fmt_int(qc$reads), "</td><td class='num'>", fmt_int(qc$mappedreads), "</td><td class='num'>", fmt_pct(qc$mapping_pct), "</td>") else "",
+  if (has_rpg) paste0("<td class='num'>", fmt_num(qc$reads_per_guide, 1), "</td>") else "",
   if (has_class) paste0("<td class='num'>", fmt_pct(qc$pct_near_miss), "</td><td class='num'>", fmt_pct(qc$pct_far_miss), "</td>") else "",
   "<td class='num'>", fmt_num(qc$Gini, 4), "</td>",
   "<td class='num'>", fmt_num(qc$ratio_90_10, 2), "</td>",
@@ -192,6 +197,7 @@ summary_table <- paste0(
   "<table class='qc-table'><thead><tr>",
   "<th>Sample</th>",
   if (has_mapping) "<th>Total Reads</th><th>Mapped Reads</th><th>Mapping % (Exact)</th>" else "",
+  if (has_rpg) "<th>Reads per Guide</th>" else "",
   if (has_class) "<th>% Near-Miss</th><th>% Far-Miss</th>" else "",
   "<th>Gini</th><th>90/10 Ratio</th><th>% Undetected (n)</th><th>% Within 4-fold of Mean</th><th>Flags</th>",
   "</tr></thead><tbody>",
@@ -268,10 +274,50 @@ mapping_interp <- if (has_breakdown) {
     other libraries; read the plot together with the table below.)")
 } else mapping_interp_base
 
+# PCA needs at least 3 samples; the reason shown when it is missing depends on that.
+pca_missing_reason <- if (n_samples < 3) {
+  paste0("PCA needs at least 3 samples with reads in this library; this library has ", n_samples, ".")
+} else "the PCA table was not found (the tables come from the wrangle step)."
+# Guides in this library (for the Read Depth text), if the summary table has it.
+n_guides <- if ("total_guides" %in% names(qc)) qc$total_guides[1] else NA
+rd_guides_txt <- if (is.na(n_guides)) "" else paste0(" This library has ", fmt_int(n_guides), " guides.")
+
+pca_desc <- r"(Each sample is one point. The plot is computed from log2(counts per million + 1) of
+    this library's guides, using the samples that have reads in this library. Guides with no reads in
+    any sample are removed. The data are centred but not scaled (PCA via <code>prcomp</code>). The axis
+    labels give the percent of the total variance each principal component (PC) explains. Only PC1
+    vs PC2 is plotted; PC3 is in the <code>pca.csv</code> table.)"
+pca_interp_base <- r"(Points close together have similar guide profiles. Replicates should cluster
+    together. Separation along PC1 between conditions or timepoints is expected after selection: it
+    is the screen working. A sample far from its replicates is suspect (low depth, mix-up,
+    contamination). The percentages say how much of the variation the plot shows.)"
+pca_interp <- if (has_breakdown) {
+  paste0(pca_interp_base, r"( Caveat for this all-vs-all run: every sample is counted against every
+    library, so samples that belong to OTHER libraries have very few reads in this library and
+    dominate the PCA. They separate from the rest simply because they hold other libraries. Read the
+    PCA together with the Mapping Rate table above.)")
+} else pca_interp_base
+
+corr_desc <- r"(Samples are ordered by hierarchical clustering (average linkage on 1 minus the
+    Pearson correlation of log10(count + 1)), so similar samples sit next to each other. Each cell
+    shows the correlation of one pair of samples, to 2 decimals. The colour scale (0 to 1) is the
+    same in every library, so libraries can be compared by eye. <strong>Pearson</strong> uses log
+    counts and is sensitive to overall magnitude. <strong>Spearman</strong> uses ranks and is robust
+    to outliers.)"
+corr_interp_base <- r"(Replicates should form blocks of high values, typically above 0.9 for a
+    technically sound screen. Lower correlation between conditions or timepoints is expected after
+    selection. Low correlation between nominal replicates suggests a sample mix-up, a failed or
+    low-depth replicate, or heavy dropout in one of them.)"
+corr_interp <- if (has_breakdown) {
+  paste0(corr_interp_base, r"( In all-vs-all runs, samples that belong to other libraries have very
+    few reads here and will correlate poorly.)")
+} else corr_interp_base
+
 sections <- list(
   list(
     id = "guide_representation", svgs = "guide_representation",
-    title = "1. Guide Representation (Ranked)",
+    question = "1. Are the library's guides represented evenly in each sample?",
+    title = "Guide Representation (Ranked)",
     description = paste0("Every guide's ", avg_word, ", sorted from lowest to highest, on a log scale (log10 of CPM + 1). CPM scales each sample to its own total reads, so samples of different sequencing depth sit on the same scale. This is the standard check for how evenly a library is represented."),
     interpretation = r"(The curve's slope reflects representation evenness. A shallow, gradual rise
     across the whole curve is the ideal case: most guides sit within a similar count range. A steep
@@ -291,22 +337,29 @@ sections <- list(
   ),
   list(
     id = "ecdf", svgs = "ecdf",
-    title = "2. ECDF of gRNA Representation",
-    description = r"(The cumulative fraction of guides with a read count at or below a given value.
-    The dashed vertical line marks the sample's mean read count &mdash; what every guide would have
-    if reads were split perfectly evenly.)",
-    interpretation = r"(In a perfectly even library, every guide has the same count, so the curve
-    would rise in one sharp step right at the mean line. The more of the curve sitting to the left
-    of the mean line, the larger the fraction of guides falling below their fair share of reads.)",
-    troubleshooting = r"(<li>A wide gap between the curve and the mean line &mdash; most of the
-    curve well to the left of it &mdash; indicates a large fraction of guides are underrepresented.
-    Cross-check "% Undetected Guides" below for how many sit at exactly zero.</li>
+    question = "2. What fraction of guides received few reads, and how deep is each sample on average?",
+    title = "ECDF of gRNA Representation",
+    description = r"(The top panel shows the cumulative fraction of guides at or below a given read
+    count, one curve per sample. The bottom panel uses the same read-count axis and has one bar per
+    sample, in the same colour as its curve. Each bar shows that sample's mean read count per guide
+    &mdash; what every guide would have if reads were split perfectly evenly. The value is printed
+    next to the bar.)",
+    interpretation = r"(A curve that rises steeply close to the end of its bar (the mean) means even
+    coverage. The more of the curve sitting far to the left of the mean, the more guides fall below
+    their fair share of reads. The mean also tells you how deep each sample is per guide. Compare
+    the bars across samples to spot a sample with far fewer reads per guide than its replicates.)",
+    troubleshooting = r"(<li>Most of the curve sitting well to the left of its bar's end indicates a
+    large fraction of guides are underrepresented. Cross-check "% Undetected Guides" below for how
+    many sit at exactly zero.</li>
+    <li>A bar much shorter than the bars of its replicates means that sample has far fewer reads per
+    guide. Check the Read Depth section below.</li>
     <li>An unusual step or kink in the curve's shape indicates the sample may be a mixture of two
     populations, e.g. cross-contamination between pools.</li>)"
   ),
   list(
     id = "lorenz", svgs = "lorenz",
-    title = "3. Lorenz Curves",
+    question = "3. How unequally are reads shared among guides?",
+    title = "Lorenz Curves (Gini)",
     description = r"(Guides sorted from least to most reads, plotted as cumulative % of reads
     against cumulative % of guides.)",
     interpretation = r"(The diagonal line represents an ideal sample with perfectly even gRNA
@@ -323,7 +376,8 @@ sections <- list(
   ),
   list(
     id = "density", svgs = "density",
-    title = "4. Read-Count Density",
+    question = "4. Do guides form one population or several (e.g. a dropout group near zero)?",
+    title = "Read-Count Density",
     description = density_desc,
     interpretation = r"(A single, smooth peak is the ideal case: one uniform population of
     well-represented guides. A second peak near zero read counts indicates gRNA dropout: guides
@@ -347,7 +401,8 @@ sections <- list(
   ),
   list(
     id = "controls_ecdf", svgs = "controls_ecdf",
-    title = "5. Control vs Targeting gRNA Representation",
+    question = "5. Do control guides behave differently from targeting guides?",
+    title = "Control vs Targeting gRNA Representation",
     description = r"(The same per-sample count distribution as the ECDF above, split into control
     guides (Control/NTC/Non-targeting) and targeting guides.)",
     interpretation = r"(Control guides aren't expected to affect cell fitness, so their curve is a
@@ -368,7 +423,8 @@ sections <- list(
   ),
   list(
     id = "90_10_ratio", svgs = "90_10_ratio",
-    title = "6. 90/10 Percentile Ratio (Library Skew)",
+    question = "6. How many times more reads do the best-covered guides get than the worst-covered?",
+    title = "90/10 Percentile Ratio (Library Skew)",
     description = r"(The ratio of the top 10% of guides' read counts to the bottom 10%, across all
     of this library's guides, including guides with zero reads. A sample with more than 10% zero-count
     guides has a bottom-10% value of zero, which is counted as 1 read, so its ratio is the 90th
@@ -384,7 +440,8 @@ sections <- list(
   ),
   list(
     id = "undetected_guides", svgs = "undetected_guides",
-    title = "7. Undetected Guides (Zero Counts)",
+    question = "7. How many guides received no reads at all?",
+    title = "Undetected Guides (Zero Counts)",
     description = "The percent (and count) of guides with exactly zero reads in each sample.",
     interpretation = r"(Some zero counts occur by chance even in a well-represented library, so the
     ideal is close to 0%, not necessarily exactly 0%. This report flags 5% or more as high dropout;
@@ -403,7 +460,8 @@ sections <- list(
   ),
   list(
     id = "mapping_rate", svgs = "mapping_rate",
-    title = "8. Mapping Rate (% Exact Guide Match)",
+    question = "8. What share of each sample's reads matches a guide of this library?",
+    title = "Mapping Rate (% Exact Guide Match)",
     description = mapping_desc,
     interpretation = mapping_interp,
     troubleshooting = r"(<li>A low rate in one sample among otherwise-good ones indicates a
@@ -420,7 +478,8 @@ sections <- list(
   ),
   list(
     id = "read_classification", svgs = "read_classification",
-    title = "9. Read Classification: Exact / Near-Miss / Far-Miss",
+    question = "9. Why didn't the other reads match a guide: sequencing errors or unrelated sequences?",
+    title = "Read Classification: Exact / Near-Miss / Far-Miss",
     description = r"(Every sequenced read, split into three categories: an <strong>exact match</strong>
     to a library guide (what mageck count itself counts &mdash; the same number as Mapping Rate
     above), a <strong>near-miss</strong> (exactly one base different from some guide &mdash; not
@@ -446,7 +505,8 @@ sections <- list(
   ),
   list(
     id = "gc_vs_depth", svgs = "gc_vs_depth",
-    title = "10. GC Content vs Read Depth",
+    question = "10. Does a guide's GC content bias how many reads it gets?",
+    title = "GC Content vs Read Depth",
     description = "Each guide's GC content plotted against its normalized read count, with a smoothed trend line.",
     interpretation = r"(A flat trend line is the ideal case: read count doesn't depend on GC
     content. The steeper a monotonic slope, the stronger the GC-dependent amplification bias in
@@ -468,14 +528,10 @@ sections <- list(
   ),
   list(
     id = "replicate_correlation", svgs = c("pearson_correlation", "spearman_correlation"),
-    title = "11. Replicate Correlation",
-    description = r"(How well every pair of samples in this pool agree with each other:
-    <strong>Pearson</strong> correlation (on log-transformed counts, sensitive to overall count
-    magnitude) and <strong>Spearman</strong> correlation (rank-based, robust to outliers).)",
-    interpretation = r"(True replicates correlate highest of any pair in the pool — above 0.9 is
-    typical for a technically sound screen. Lower correlation between different conditions or
-    timepoints is expected, not a problem, provided replicates of the same condition still agree
-    closely with each other.)",
+    question = "11. Do samples, and especially replicates, agree with each other?",
+    title = "Sample Correlation Heatmap (Pearson and Spearman)",
+    description = corr_desc,
+    interpretation = corr_interp,
     troubleshooting = r"(<li>Low correlation between nominal replicates indicates a possible sample
     mix-up in <code>samplesheet.csv</code> — check that before suspecting anything biological.</li>
     <li>Low correlation is very often explained by one replicate having much lower depth than its
@@ -487,6 +543,40 @@ sections <- list(
     itself worth checking — it can indicate the same data was counted twice (a duplicated FASTQ, or
     two sample names pointing at the same file), not genuinely perfect reproducibility.</li>)",
     missing_reason = "this library has only one sample, so there's nothing to correlate it against."
+  ),
+  list(
+    id = "pca", svgs = "pca",
+    question = "12. Which samples resemble each other overall, and do replicates group together?",
+    title = "Principal Component Analysis (PCA)",
+    description = pca_desc,
+    interpretation = pca_interp,
+    troubleshooting = r"(<li>A sample far from its replicates: check its mapping rate, % undetected
+    guides and read depth in the sections of this report, and check <code>samplesheet.csv</code>
+    for a mix-up.</li>
+    <li>All samples of one condition split into two groups: check for a batch effect or an index
+    mix-up.</li>)",
+    missing_reason = pca_missing_reason
+  ),
+  list(
+    id = "read_depth", svgs = "read_depth",
+    question = "13. Was each sample sequenced deeply enough?",
+    title = "Read Depth",
+    description = r"(For each sample, the grey bar is the total number of sequenced reads (from the
+    mageck count log). The blue bar is the number of reads that matched a guide of this library. The
+    scale is log10, with abbreviated labels (K = thousand, M = million).)",
+    interpretation = paste0(r"(Depth should give enough reads per guide. The reads needed are roughly
+    the number of guides times the reads wanted per guide. A common rule of thumb is at least
+    200&ndash;500 reads per guide at the end point of a screen. Plasmid and T0 samples are often
+    sequenced deeper. This report gives reads per guide as matched reads divided by the number of
+    guides (column "Reads per Guide" in the At a Glance table). It is a rule of thumb, not a hard
+    cutoff.)", rd_guides_txt,
+    if (has_breakdown) r"( In this all-vs-all run the grey bar is the whole sample and the blue bar
+    is the part that belongs to this library.)" else ""),
+    troubleshooting = r"(<li>Low reads per guide at the end point: expect noisy counts with more
+    dropout. Re-sequence deeper, or reduce the size of the pooled library.</li>
+    <li>A large gap between the grey and blue bars: see Mapping Rate and Read Classification.</li>
+    <li>Very different depth between replicates: expect a lower correlation between them.</li>)",
+    missing_reason = "no read-depth table was found (the tables come from the wrangle step)."
   )
 )
 
@@ -508,7 +598,7 @@ render_section <- function(sec) {
   }
   paste0(
     "<section id='", sec$id, "'>",
-    "<h2>", sec$title, "</h2>",
+    "<h2>", sec$question, "</h2><p class='subtitle'>", sec$title, "</p>",
     "<p class='desc'>", sec$description, "</p>",
     body,
     extra,
@@ -519,7 +609,7 @@ render_section <- function(sec) {
 }
 
 toc_items <- paste0("<li><a href='#", vapply(sections, `[[`, character(1), "id"), "'>",
-                     vapply(sections, `[[`, character(1), "title"), "</a></li>", collapse = "\n")
+                     vapply(sections, `[[`, character(1), "question"), "</a></li>", collapse = "\n")
 sections_html <- paste(vapply(sections, render_section, character(1)), collapse = "\n")
 
 # ---- Assemble the page -------------------------------------------------------
@@ -545,6 +635,7 @@ nav.toc ul { columns: 2; margin: 0; padding-left: 1.2rem; }
 nav.toc a { color: var(--accent); text-decoration: none; }
 nav.toc a:hover { text-decoration: underline; }
 h2 { font-size: 1.3rem; margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
+.subtitle { margin: -0.3rem 0 1rem; font-size: 0.95rem; color: var(--muted); font-weight: 400; }
 .desc { color: #333; }
 .plot-row { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; margin: 1rem 0; }
 .plot { flex: 1 1 420px; max-width: 100%; text-align: center; }
@@ -593,7 +684,8 @@ html <- paste0(
   "count. Higher is more uniform &mdash; another way of looking at the same evenness the Gini ",
   "coefficient and 90/10 ratio measure.</div>",
   "<nav class='toc'><h2>Sections</h2><ul>", toc_items, "</ul></nav>",
-  "<section id='summary'><h2>At a Glance</h2>", summary_table, "</section>",
+  "<section id='summary'><h2>How does each sample look overall, and which ones need attention?</h2>",
+  "<p class='subtitle'>At a Glance</p>", summary_table, "</section>",
   sections_html,
   "<footer>Generated by the CRISPR_SCREEN pipeline's guide_representation_report.R from tables in ",
   html_escape(tables_dir), " and plots in ", html_escape(plots_dir), ".</footer>",
