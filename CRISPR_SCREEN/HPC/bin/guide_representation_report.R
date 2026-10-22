@@ -282,7 +282,7 @@ pca_missing_reason <- if (n_samples < 3) {
 n_guides <- if ("total_guides" %in% names(qc)) qc$total_guides[1] else NA
 rd_guides_txt <- if (is.na(n_guides)) "" else paste0(" This library has ", fmt_int(n_guides), " guides.")
 
-pca_desc <- r"(Each sample is one point. The plot is computed from log2(counts per million + 1) of
+pca_desc <- r"(Each sample is one point. Points are coloured by sample (see legend). The plot is computed from log2(counts per million + 1) of
     this library's guides, using the samples that have reads in this library. Guides with no reads in
     any sample are removed. The data are centred but not scaled (PCA via <code>prcomp</code>). The axis
     labels give the percent of the total variance each principal component (PC) explains. Only PC1

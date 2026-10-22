@@ -516,65 +516,6 @@ svg_undet <- bar_compare("pct_undetected", "% Undetected", "Undetected Guides by
 svg_map   <- if (has_mapping) bar_compare("mapping_pct", "% Mapped (Exact)", "Mapping Rate / % Exact Match by Pool", hline_flag = 30) else NULL
 
 # ---- PCA of samples, one panel per pool -------------------------------------
-# Greedy deterministic label placement (no ggrepel), same helper as
-# guide_representation_plot.R: points sorted by x each take the first of
-# above / below / right / left (then diagonals, then farther rings) whose label
-# box overlaps no box already placed (other labels, all points) and stays
-# inside the axis limits; otherwise the candidate with the least overlap.
-place_labels <- function(x, y, labels, xlim, ylim) {
-  xs <- diff(xlim); ys <- diff(ylim)
-  w <- nchar(labels) * 0.015 * xs
-  h <- 0.05 * ys
-  ox <- 0.025 * xs; oy <- 0.03 * ys
-  pr_x <- 0.012 * xs; pr_y <- 0.012 * ys
-  # boxes: xmin, xmax, ymin, ymax; all points are obstacles from the start
-  boxes <- cbind(x - pr_x, x + pr_x, y - pr_y, y + pr_y)
-  overlap <- function(b, others) {
-    if (nrow(others) == 0) return(0)
-    ow <- pmax(0, pmin(b[2], others[, 2]) - pmax(b[1], others[, 1]))
-    oh <- pmax(0, pmin(b[4], others[, 4]) - pmax(b[3], others[, 3]))
-    sum(ow * oh)
-  }
-  out <- data.frame(x = x, y = y, hjust = 0.5, vjust = 0, label = labels)
-  placed <- boxes[0, , drop = FALSE]
-  for (i in order(x, y)) {
-    # candidate anchors: above, below, right, left, then the four diagonals;
-    # tried at increasing distances (rings) from the point
-    cands <- list()
-    for (ring in c(1, 2.2, 3.6)) {
-      dx <- ox * ring; dy <- oy * ring
-      cands <- c(cands, list(
-        list(px = x[i],      py = y[i] + dy, hj = 0.5, vj = 0,
-             b = c(x[i] - w[i] / 2, x[i] + w[i] / 2, y[i] + dy, y[i] + dy + h)),
-        list(px = x[i],      py = y[i] - dy, hj = 0.5, vj = 1,
-             b = c(x[i] - w[i] / 2, x[i] + w[i] / 2, y[i] - dy - h, y[i] - dy)),
-        list(px = x[i] + dx, py = y[i],      hj = 0,   vj = 0.5,
-             b = c(x[i] + dx, x[i] + dx + w[i], y[i] - h / 2, y[i] + h / 2)),
-        list(px = x[i] - dx, py = y[i],      hj = 1,   vj = 0.5,
-             b = c(x[i] - dx - w[i], x[i] - dx, y[i] - h / 2, y[i] + h / 2)),
-        list(px = x[i] + dx, py = y[i] + dy, hj = 0,   vj = 0,
-             b = c(x[i] + dx, x[i] + dx + w[i], y[i] + dy, y[i] + dy + h)),
-        list(px = x[i] - dx, py = y[i] + dy, hj = 1,   vj = 0,
-             b = c(x[i] - dx - w[i], x[i] - dx, y[i] + dy, y[i] + dy + h)),
-        list(px = x[i] + dx, py = y[i] - dy, hj = 0,   vj = 1,
-             b = c(x[i] + dx, x[i] + dx + w[i], y[i] - dy - h, y[i] - dy)),
-        list(px = x[i] - dx, py = y[i] - dy, hj = 1,   vj = 1,
-             b = c(x[i] - dx - w[i], x[i] - dx, y[i] - dy - h, y[i] - dy))
-      ))
-    }
-    others <- rbind(boxes[-i, , drop = FALSE], placed)
-    score <- vapply(cands, function(cd) {
-      inside <- cd$b[1] >= xlim[1] && cd$b[2] <= xlim[2] && cd$b[3] >= ylim[1] && cd$b[4] <= ylim[2]
-      overlap(cd$b, others) + if (inside) 0 else 1e6 * xs * ys
-    }, numeric(1))
-    k <- which(score == 0)[1]
-    if (is.na(k)) k <- which.min(score)
-    cd <- cands[[k]]
-    out[i, c("x", "y", "hjust", "vjust")] <- c(cd$px, cd$py, cd$hj, cd$vj)
-    placed <- rbind(placed, cd$b)
-  }
-  out
-}
 
 svg_pca <- if (!is.null(pca_all) && !is.null(pcavar_all) && nrow(pca_all) > 0) {
   pad <- function(r) {
@@ -583,39 +524,34 @@ svg_pca <- if (!is.null(pca_all) && !is.null(pcavar_all) && nrow(pca_all) > 0) {
     r + c(-1, 1) * 0.22 * d
   }
   pca_pools <- pools[pools %in% pca_all$pool]
-  lab_list <- list(); blank_list <- list(); pt_list <- list()
+  blank_list <- list(); pt_list <- list()
   for (pl in pca_pools) {
     d <- pca_all[pca_all$pool == pl, ]
     v <- pcavar_all[pcavar_all$pool == pl, ]
     v1 <- v$pct_variance[v$PC == "PC1"][1]; v2 <- v$pct_variance[v$PC == "PC2"][1]
     lbl <- paste0(pl, "\nPC1 ", sprintf("%.1f", v1), "%, PC2 ", sprintf("%.1f", v2), "%")
     xlim <- pad(range(d$PC1)); ylim <- pad(range(d$PC2))
-    ld <- place_labels(d$PC1, d$PC2, d$sample, xlim, ylim)
-    ld$sample <- d$sample; ld$pool_label <- lbl
-    lab_list[[pl]] <- ld
     blank_list[[pl]] <- data.frame(PC1 = xlim, PC2 = ylim, pool_label = lbl)
     d$pool_label <- lbl
     pt_list[[pl]] <- d
   }
-  lab_df <- dplyr::bind_rows(lab_list); blank_df <- dplyr::bind_rows(blank_list); pt_df <- dplyr::bind_rows(pt_list)
+  blank_df <- dplyr::bind_rows(blank_list); pt_df <- dplyr::bind_rows(pt_list)
   lvls <- unique(pt_df$pool_label)
-  lab_df$pool_label <- factor(lab_df$pool_label, levels = lvls)
   blank_df$pool_label <- factor(blank_df$pool_label, levels = lvls)
   pt_df$pool_label <- factor(pt_df$pool_label, levels = lvls)
-  p <- ggplot(pt_df, aes(x = PC1, y = PC2, color = sample)) +
+  p <- ggplot(pt_df, aes(x = PC1, y = PC2)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +
     geom_blank(data = blank_df, aes(x = PC1, y = PC2), inherit.aes = FALSE) +
-    geom_point(size = 2.5) +
-    geom_text(data = lab_df, aes(x = x, y = y, label = label, hjust = hjust, vjust = vjust),
-              size = 2.8, show.legend = FALSE) +
-    scale_color_manual(values = sample_cols, guide = "none") +
+    geom_point(aes(fill = sample), shape = 21, size = 4.5, alpha = 0.7, colour = "grey20", stroke = 0.3) +
+    scale_fill_manual(values = sample_cols, name = "Sample") +
+    guides(fill = guide_legend(override.aes = list(alpha = 0.7, size = 4))) +
     scale_x_continuous(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
     facet_wrap(~pool_label, scales = "free", ncol = facet_ncol) +
     labs(x = "PC1", y = "PC2", title = paste("PCA of Samples by Pool —", project)) +
     my_theme + centered
-  plot_to_svg(p, "cmp-pca", facet_w, facet_h + 0.4)
+  plot_to_svg(p, "cmp-pca", facet_w + 1.4, facet_h + 0.4)
 } else NULL
 
 # ---- Read depth per sample ---------------------------------------------------
@@ -798,7 +734,7 @@ sections_html <- paste(c(
   },
 
   if (!is.null(svg_pca)) {
-    section("pca", "One panel per pool, one point per sample. Each pool's PCA uses log2(counts per million + 1) of that pool's guides, centred but not scaled; PC1 is plotted against PC2 and the percentage of variance each explains is in the panel title. Pools with fewer than 3 samples with reads in them are left out (no PCA).",
+    section("pca", "One panel per pool, one point per sample. Points are coloured by sample (see legend). Each pool's PCA uses log2(counts per million + 1) of that pool's guides, centred but not scaled; PC1 is plotted against PC2 and the percentage of variance each explains is in the panel title. Pools with fewer than 3 samples with reads in them are left out (no PCA).",
       plot_div(svg_pca),
       paste0("Points close together have similar guide profiles; replicates should cluster. Separation along PC1 by condition or timepoint is expected after selection. A sample far from its replicates is suspect.",
              if (all_vs_all) " In all-vs-all mode every sample is counted against every pool, so samples that belong to other pools have very few reads in a pool and dominate or separate in that pool's PCA &mdash; read it together with section 0 (Reads per Library)." else ""),

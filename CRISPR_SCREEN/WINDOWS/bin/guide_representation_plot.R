@@ -383,65 +383,6 @@ if (!is.null(gc)) {
 }
 
 # ---- 10. PCA of samples -----------------------------------------------------
-# Greedy deterministic label placement (no ggrepel): points sorted by x each
-# take the first of above / below / right / left (then diagonals, then
-# farther rings) whose label box overlaps no
-# box already placed (other labels, all points) and stays inside the axis
-# limits; otherwise the candidate with the least overlap.
-place_labels <- function(x, y, labels, xlim, ylim) {
-  xs <- diff(xlim); ys <- diff(ylim)
-  w <- nchar(labels) * 0.015 * xs
-  h <- 0.05 * ys
-  ox <- 0.025 * xs; oy <- 0.03 * ys
-  pr_x <- 0.012 * xs; pr_y <- 0.012 * ys
-  # boxes: xmin, xmax, ymin, ymax; all points are obstacles from the start
-  boxes <- cbind(x - pr_x, x + pr_x, y - pr_y, y + pr_y)
-  overlap <- function(b, others) {
-    if (nrow(others) == 0) return(0)
-    ow <- pmax(0, pmin(b[2], others[, 2]) - pmax(b[1], others[, 1]))
-    oh <- pmax(0, pmin(b[4], others[, 4]) - pmax(b[3], others[, 3]))
-    sum(ow * oh)
-  }
-  out <- data.frame(x = x, y = y, hjust = 0.5, vjust = 0, label = labels)
-  placed <- boxes[0, , drop = FALSE]
-  for (i in order(x, y)) {
-    # candidate anchors: above, below, right, left, then the four diagonals;
-    # tried at increasing distances (rings) from the point
-    cands <- list()
-    for (ring in c(1, 2.2, 3.6)) {
-      dx <- ox * ring; dy <- oy * ring
-      cands <- c(cands, list(
-        list(px = x[i],      py = y[i] + dy, hj = 0.5, vj = 0,
-             b = c(x[i] - w[i] / 2, x[i] + w[i] / 2, y[i] + dy, y[i] + dy + h)),
-        list(px = x[i],      py = y[i] - dy, hj = 0.5, vj = 1,
-             b = c(x[i] - w[i] / 2, x[i] + w[i] / 2, y[i] - dy - h, y[i] - dy)),
-        list(px = x[i] + dx, py = y[i],      hj = 0,   vj = 0.5,
-             b = c(x[i] + dx, x[i] + dx + w[i], y[i] - h / 2, y[i] + h / 2)),
-        list(px = x[i] - dx, py = y[i],      hj = 1,   vj = 0.5,
-             b = c(x[i] - dx - w[i], x[i] - dx, y[i] - h / 2, y[i] + h / 2)),
-        list(px = x[i] + dx, py = y[i] + dy, hj = 0,   vj = 0,
-             b = c(x[i] + dx, x[i] + dx + w[i], y[i] + dy, y[i] + dy + h)),
-        list(px = x[i] - dx, py = y[i] + dy, hj = 1,   vj = 0,
-             b = c(x[i] - dx - w[i], x[i] - dx, y[i] + dy, y[i] + dy + h)),
-        list(px = x[i] + dx, py = y[i] - dy, hj = 0,   vj = 1,
-             b = c(x[i] + dx, x[i] + dx + w[i], y[i] - dy - h, y[i] - dy)),
-        list(px = x[i] - dx, py = y[i] - dy, hj = 1,   vj = 1,
-             b = c(x[i] - dx - w[i], x[i] - dx, y[i] - dy - h, y[i] - dy))
-      ))
-    }
-    others <- rbind(boxes[-i, , drop = FALSE], placed)
-    score <- vapply(cands, function(cd) {
-      inside <- cd$b[1] >= xlim[1] && cd$b[2] <= xlim[2] && cd$b[3] >= ylim[1] && cd$b[4] <= ylim[2]
-      overlap(cd$b, others) + if (inside) 0 else 1e6 * xs * ys
-    }, numeric(1))
-    k <- which(score == 0)[1]
-    if (is.na(k)) k <- which.min(score)
-    cd <- cands[[k]]
-    out[i, c("x", "y", "hjust", "vjust")] <- c(cd$px, cd$py, cd$hj, cd$vj)
-    placed <- rbind(placed, cd$b)
-  }
-  out
-}
 
 pca <- read_table("pca")
 pca_var <- read_table("pca_variance")
@@ -457,17 +398,12 @@ if (!is.null(pca) && !is.null(pca_var)) {
   }
   pca_xlim <- pad(range(pca$PC1))
   pca_ylim <- pad(range(pca$PC2))
-  lab_df <- place_labels(pca$PC1, pca$PC2, pca$sample, pca_xlim, pca_ylim)
-  lab_df$sample <- pca$sample
-  pca_levels <- sort(unique(pca$sample))
-  pca_cols <- setNames(scales::hue_pal()(length(pca_levels)), pca_levels)
-  p <- ggplot(pca, aes(x = PC1, y = PC2, color = sample)) +
+  p <- ggplot(pca, aes(x = PC1, y = PC2)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +
-    geom_point(size = 3) +
-    geom_text(data = lab_df, aes(x = x, y = y, label = label, hjust = hjust, vjust = vjust),
-              size = 3.3, show.legend = FALSE) +
-    scale_color_manual(values = pca_cols, guide = "none") +
+    geom_point(aes(fill = sample), shape = 21, size = 4.5, alpha = 0.7, colour = "grey20", stroke = 0.3) +
+    scale_fill_manual(values = sample_cols, name = "Sample") +
+    guides(fill = guide_legend(override.aes = list(alpha = 0.7, size = 4))) +
     scale_x_continuous(limits = pca_xlim, expand = c(0, 0)) +
     scale_y_continuous(limits = pca_ylim, expand = c(0, 0)) +
     labs(
