@@ -139,6 +139,7 @@ check_md5 /opt/omics/annotations/t2t/t2t.ncbiRefSeq.curated.norandom.gtf.gz e510
 
 echo "== crispro and protiler =="
 check "crispro -h" crispro -h
+check "crispro-lowmem present" test -x /usr/local/bin/crispro-lowmem
 check "protiler -h" protiler -h
 check "protiler env breakfast" /opt/envs/protiler/bin/Rscript -e 'library(breakfast)'
 
@@ -204,6 +205,24 @@ crispro_outputs() {
 check "ProTiler demo SMARCB1 matches reference" protiler_demo
 check "crispro one-gene example runs" crispro_example
 check "crispro outputs present and non-empty" crispro_outputs
+
+# crispro-lowmem on the full table must give the same tables as crispro on the one-gene
+# subset above (reuses scores.csv from crispro_example). Same checks as the md5 comparison
+# of all csv files, crispro.log excluded.
+crispro_lowmem_same() {
+    (
+        set -o pipefail
+        cd "$tmp" &&
+        { crispro-lowmem -a /opt/crispro/annotations/CRISPRO.GRCh37.ensembl90.20180901.csv.gz -i ENSG00000099956 --scores scores.csv -o out_lowmem 2>"$tmp/lowmem.log" >/dev/null \
+            || { cat "$tmp/lowmem.log" >&2; return 1; }; } &&
+        ( cd out && find . -name '*.csv' ! -name crispro.log ! -path './.crispro_lowmem/*' | sort | xargs md5sum ) > md5_out.txt &&
+        ( cd out_lowmem && find . -name '*.csv' ! -name crispro.log ! -path './.crispro_lowmem/*' | sort | xargs md5sum ) > md5_lowmem.txt &&
+        test -s md5_out.txt &&
+        diff md5_out.txt md5_lowmem.txt >&2
+    )
+}
+
+check "crispro-lowmem (full annotation) gives the same tables as crispro on the subset" crispro_lowmem_same
 
 echo "== summary =="
 echo "$failures failures"

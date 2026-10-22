@@ -10,6 +10,7 @@
 #   samtools bgzip tabix htsfile bedtools -> ngs (the only env that has them now)
 #   cutadapt -> ngs (5.2; env crispro has its own 5.1, used by the crispro wrapper)
 #   pymol -> py
+# crispro-lowmem is not a wrapper: it is the script docker/omics/crispro-lowmem, COPY'd into /usr/local/bin by the Dockerfile
 # Add a line here, bump VERSION, rebuild: nothing else needs editing.
 #
 # env  executable

@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# crispro-lowmem - run crispro with the memory of one gene instead of the whole table.
+# Installed as /usr/local/bin/crispro-lowmem (COPY in the Dockerfile; not a wrapper line).
+#
+# Why: crispro loads the whole 48.36 M-row annotation table (loadCrispro reads it in
+# chunks of 10**7 rows and keeps the rows whose id column is in -i); peak memory is
+# ~11.5-16 GB. Nothing downstream uses the rows of other genes. This script streams the
+# table once through awk, keeps the header and the rows of the requested ids, caches that
+# subset, and runs crispro on it with -a <subset>.
+# Usage: exactly the arguments of crispro (-a may be omitted when
+# $CRISPRO_ANNOTATIONS/CRISPRO.GRCh37.ensembl90.20180901.csv.gz exists).
+#
+# Identifiers are parsed with crispro's own getIdentifier (same id-type rule: the first
+# id's prefix ENSG/ENST/ENSP, else gene_name; an id file is read the same way).
+# Cache: $CRISPRO_LOWMEM_CACHE, else <outdir>/.crispro_lowmem (-o), else
+# ${TMPDIR:-/tmp}/crispro_lowmem. Key: ids, column, annotation path, size and mtime.
+#
+# Evidence (image omics:2026.10.1, 3 GB container; see README "Running CRISPRO with
+# little memory"): output tables (csv/tsv/txt) of crispro on a pre-filtered subset and of
+# crispro-lowmem on the full table are md5-identical on 1-, 21- and 60-gene subsets
+# (the 60-gene result and the first 1- and 21-gene results are from the earlier
+# investigation; the 1- and 21-gene cases were repeated with this script, see README).
+# Peak memory ~0.2-0.35 GB instead of ~11.5-16 GB; the filter takes ~41 s and ~12 MB.
+#
+# Limits: FASTQ mode (-f) and --color-structure were not tested separately (they use the
+# same filtered frame). Mixed id types (ENSG with ENST, ...) are refused, because crispro
+# would silently use the first id's type. Excel id files need the crispro env's readers
+# (same as crispro). Ids with no rows in the table only produce a warning (crispro drops them).
+set -euo pipefail
+
+PY=/opt/envs/crispro/bin/python
+DEFAULT_ANNOT_NAME=CRISPRO.GRCh37.ensembl90.20180901.csv.gz
+
+# No arguments, help, or nothing to do: crispro answers (and complains) itself.
+if [ "$#" -eq 0 ]; then
+    exec crispro
+fi
+for a in "$@"; do
+    case "$a" in
+        -h|--help) exec crispro "$@" ;;
+    esac
+done
+
+read -r -d '' PYCODE <<'PYEOF' || true
+import argparse, os, sys, gzip
+
+real_stdout = sys.stdout
+sys.stdout = sys.stderr          # anything printed while importing crispro goes to stderr
+
+class Passthrough(Exception):
+    pass
+
+class P(argparse.ArgumentParser):
+    def error(self, message):
+        raise Passthrough()
+
+p = P(add_help=False)
+p.add_argument('-a', '--annotation-file', dest='annot')
+p.add_argument('-i', '--identifiers', nargs='*', type=str)
+p.add_argument('-o', '--outdir')
+try:
+    ns, _ = p.parse_known_args(sys.argv[3:])
+except Passthrough:
+    ns = None
+if ns is None or not ns.identifiers:
+    real_stdout.write('PASSTHROUGH\n')
+    sys.exit(0)
+
+defaulted = 0
+annot = ns.annot
+if annot is None:
+    cand = os.path.join(os.environ.get('CRISPRO_ANNOTATIONS', ''), sys.argv[2])
+    if os.environ.get('CRISPRO_ANNOTATIONS') and os.path.isfile(cand):
+        annot, defaulted = cand, 1
+if annot is None:
+    real_stdout.write('PASSTHROUGH\n')
+    sys.exit(0)
+
+from crispro.crispro_io import getIdentifier
+id_type, ids = getIdentifier(ns.identifiers)
+ids = [str(x) for x in ids]
+
+def kind(i):
+    for pre in ('ENSG', 'ENST', 'ENSP'):
+        if i.startswith(pre):
+            return pre
+    return 'other'
+
+kinds = {}
+for i in ids:
+    kinds.setdefault(kind(i), []).append(i)
+if len(kinds) > 1:
+    sys.stderr.write('crispro-lowmem: ERROR: identifiers of mixed types (%s); crispro would use only the type of the first id. Run them separately.\n'
+                     % ', '.join('%s: %s' % (k, ' '.join(sorted(v)[:5]) + (' ...' if len(v) > 5 else '')) for k, v in sorted(kinds.items())))
+    sys.exit(2)
+
+opener = gzip.open if annot.endswith('.gz') else open
+with opener(annot, 'rt') as fh:
+    header = fh.readline().rstrip('\r\n').split(',')
+if id_type not in header:
+    sys.stderr.write('crispro-lowmem: ERROR: column %s not found in the header of %s\n' % (id_type, annot))
+    sys.exit(2)
+col = header.index(id_type) + 1
+
+with open(sys.argv[1], 'w') as out:
+    for i in sorted(ids):
+        out.write(i + '\n')
+real_stdout.write('\t'.join([id_type, str(col), str(len(ids)), annot, ns.outdir or '', str(defaulted)]) + '\n')
+PYEOF
+
+idsf=$(mktemp "${TMPDIR:-/tmp}/crispro_lowmem_ids.XXXXXX")
+tmpsub=""
+cleanup() { rm -f "$idsf" ${tmpsub:+"$tmpsub"}; }
+trap cleanup EXIT
+
+# python argv: 1 = ids file to write, 2 = default annotation name, 3.. = crispro arguments
+line=$("$PY" -W ignore -c "$PYCODE" "$idsf" "$DEFAULT_ANNOT_NAME" "$@") || exit 2
+if [ "$line" = PASSTHROUGH ]; then
+    rm -f "$idsf"
+    trap - EXIT
+    exec crispro "$@"
+fi
+
+IFS=$'\t' read -r id_type col nids annot outdir defaulted <<<"$line"
+[ "$defaulted" = 1 ] && echo "crispro-lowmem: no -a given, using $annot" >&2
+
+if [ -n "${CRISPRO_LOWMEM_CACHE:-}" ]; then
+    cache=$CRISPRO_LOWMEM_CACHE
+elif [ -n "$outdir" ]; then
+    cache=$outdir/.crispro_lowmem
+else
+    cache=${TMPDIR:-/tmp}/crispro_lowmem
+fi
+mkdir -p "$cache"
+
+annot_real=$(realpath "$annot")
+key=$({ cat "$idsf"; printf '%s\n%s\n%s\n' "$col" "$annot_real" "$(stat -L -c '%s %Y' "$annot")"; } | sha256sum)
+key=${key%% *}
+subset=$cache/annot_${key:0:16}.csv.gz
+
+t0=$SECONDS
+state=cached
+if [ ! -s "$subset" ]; then
+    state=new
+    tmpsub=$(mktemp "$cache/.annot_tmp.XXXXXX")
+    case "$annot" in
+        *.gz) reader=(gzip -dc) ;;
+        *)    reader=(cat) ;;
+    esac
+    "${reader[@]}" "$annot" \
+        | awk -F, -v C="$col" -v L="$idsf" 'BEGIN{while((getline l<L)>0) g[l]=1} NR==1||($C in g)' \
+        | gzip > "$tmpsub" \
+        || { echo "crispro-lowmem: filtering $annot failed" >&2; exit 1; }
+    mv -f "$tmpsub" "$subset"
+    tmpsub=""
+fi
+
+# rows kept and ids without rows (gzip -dc: the subset is always gzip)
+stats=$(gzip -dc "$subset" | awk -F, -v C="$col" -v L="$idsf" '
+    BEGIN { while ((getline l < L) > 0) want[l] = 1 }
+    NR > 1 { n++; if ($C in want) seen[$C] = 1 }
+    END {
+        printf "%d", n
+        for (i in want) if (!(i in seen)) printf "\t%s", i
+        printf "\n"
+    }')
+rows=${stats%%$'\t'*}
+if [ "$rows" -eq 0 ]; then
+    echo "crispro-lowmem: ERROR: no rows for any of the $nids ids in column $id_type of $annot (wrong ids or annotation?)" >&2
+    exit 1
+fi
+if [ "$stats" != "$rows" ]; then
+    missing=${stats#*$'\t'}
+    echo "crispro-lowmem: WARNING: no rows in the annotation for: ${missing//$'\t'/ } (crispro will drop them)" >&2
+fi
+echo "crispro-lowmem: id column $id_type ($nids ids), annotation $annot, kept $rows rows -> $subset ($state, $((SECONDS - t0))s)" >&2
+
+rm -f "$idsf"
+trap - EXIT
+exec crispro "$@" -a "$subset"

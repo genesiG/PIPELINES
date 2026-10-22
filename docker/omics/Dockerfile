@@ -33,14 +33,15 @@ COPY --chmod=755 omics-slim-env /usr/local/bin/omics-slim-env
 # dependency order, NOT sorted: never sort them). The Bioconductor data packages in
 # env r download their tarballs from bioconductor.org at install: network needed.
 # micromamba occasionally aborts on Docker Desktop ("Unexpected error 9 on netlink
-# descriptor"): retry.
+# descriptor"): retry. Env r is also retried when a Bioconductor data package's
+# post-link download failed silently (env/check_bioc_installed.R; seen with reactome.db).
 # Each env is slimmed by omics-slim-env (docs, LLVM/Qt build tools, JDK build files,
 # test suites, ...) in the SAME RUN as its creation: a later rm would not shrink the
 # layer. Env r keeps its compiler toolchain (--keep-toolchain) so install.packages,
 # devtools and pak can still compile R packages from source; the others lose it.
 
-COPY env/r.lock.txt /tmp/env/r.lock.txt
-RUN ok=0;     for attempt in 1 2 3; do         micromamba create -y -p /opt/envs/r -f /tmp/env/r.lock.txt && { ok=1; break; };         echo "micromamba failed for r (attempt ${attempt} of 3)" >&2; rm -rf /opt/envs/r; sleep 5;     done;     [ "${ok}" = 1 ]  && micromamba clean -a -y  && omics-slim-env --keep-toolchain /opt/envs/r && rm -rf /tmp/env
+COPY env/r.lock.txt env/check_bioc_installed.R /tmp/env/
+RUN ok=0;     for attempt in 1 2 3; do         micromamba create -y -p /opt/envs/r -f /tmp/env/r.lock.txt && /opt/envs/r/bin/Rscript /tmp/env/check_bioc_installed.R /opt/envs/r && { ok=1; break; };         echo "micromamba failed for r (attempt ${attempt} of 3)" >&2; rm -rf /opt/envs/r; sleep 5;     done;     [ "${ok}" = 1 ]  && micromamba clean -a -y  && omics-slim-env --keep-toolchain /opt/envs/r && rm -rf /tmp/env
 
 COPY env/py.lock.txt /tmp/env/py.lock.txt
 RUN ok=0;     for attempt in 1 2 3; do         micromamba create -y -p /opt/envs/py -f /tmp/env/py.lock.txt && { ok=1; break; };         echo "micromamba failed for py (attempt ${attempt} of 3)" >&2; rm -rf /opt/envs/py; sleep 5;     done;     [ "${ok}" = 1 ]  && micromamba clean -a -y  && omics-slim-env /opt/envs/py && rm -rf /tmp/env
@@ -130,6 +131,9 @@ RUN set -eu; \
         chmod 755 "/usr/local/bin/${exe}"; \
     done
 
+# crispro-lowmem: hand-written helper (runs crispro on a cached per-gene subset of the annotation table).
+COPY --chmod=755 crispro-lowmem /usr/local/bin/crispro-lowmem
+
 # (e) Small files last, so changing them rebuilds only the layers below.
 COPY annotations_README.txt /opt/omics/annotations/t2t/README.txt
 COPY make_versions.py /tmp/make_versions.py
@@ -142,7 +146,7 @@ ENV OMICS_ANNOTATIONS=/opt/omics/annotations \
     CRISPRO_ANNOTATIONS=/opt/crispro/annotations
 
 # Same as VERSION (the release workflow passes it; keep the default in sync).
-ARG OMICS_VERSION=2026.10.0
+ARG OMICS_VERSION=2026.10.1
 LABEL org.opencontainers.image.source="https://github.com/genesiG/PIPELINES" \
       org.opencontainers.image.title="omics" \
       org.opencontainers.image.description="Lab omics toolbox: R 4.4 + Bioconductor 3.20, python, NGS (bowtie2, hisat2, samtools, deepTools, MACS3, SEACR...), QC (FastQC, MultiQC, cutadapt), MAGeCK, CRISPRO, ProTiler, curated T2T-CHM13 annotations" \

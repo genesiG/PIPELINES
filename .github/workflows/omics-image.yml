@@ -1,8 +1,12 @@
 name: omics-image
 
 # Builds, smoke-tests and publishes ghcr.io/genesig/omics:<docker/omics/VERSION>.
-# A VERSION tag is immutable: the job fails if that tag already exists. To release,
-# bump docker/omics/VERSION and merge to main.
+# A VERSION tag is immutable. The first step asks ghcr.io whether that tag exists:
+#  - tag exists: nothing is built or pushed and the job finishes green (for example after
+#    a doc-only change). Start the workflow by hand with force_rebuild to rebuild and
+#    smoke-test anyway; that never pushes.
+#  - tag does not exist: build, smoke test and push.
+# To release, bump docker/omics/VERSION and merge to main.
 on:
   push:
     branches: [main]
@@ -10,6 +14,11 @@ on:
       - "docker/omics/**"
       - ".github/workflows/omics-image.yml"
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Rebuild and smoke-test even if this version is already published (never pushes in that case)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,7 +39,52 @@ jobs:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Read version
+        run: |
+          version="$(tr -d '[:space:]' < docker/omics/VERSION)"
+          [ -n "${version}" ] || { echo "::error::docker/omics/VERSION is empty"; exit 1; }
+          echo "VERSION=${version}" >> "${GITHUB_ENV}"
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "${GITHUB_ENV}"
+
+      - name: Check whether this version is already published
+        id: gate
+        env:
+          FORCE_REBUILD: ${{ inputs.force_rebuild }}
+        run: |
+          tok="$(curl -fsS "https://ghcr.io/token?scope=repository:genesig/omics:pull" | jq -r .token)" || tok=""
+          if [ -z "${tok}" ] || [ "${tok}" = null ]; then
+            echo "::error::could not get an anonymous pull token from ghcr.io; cannot tell whether ${IMAGE}:${VERSION} exists."
+            exit 1
+          fi
+          code="$(curl -s -o /dev/null -w '%{http_code}'             -H "Authorization: Bearer ${tok}"             -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json'             "https://ghcr.io/v2/genesig/omics/manifests/${VERSION}")" || code=000
+          case "${code}" in
+            200) exists=true ;;
+            404) exists=false ;;
+            *)
+              echo "::error::unexpected HTTP status ${code} from ghcr.io for ${IMAGE}:${VERSION}; cannot tell whether it exists."
+              exit 1
+              ;;
+          esac
+          build=false
+          if [ "${exists}" != true ] || [ "${FORCE_REBUILD}" = true ]; then build=true; fi
+          push=false
+          if [ "${exists}" != true ]; then push=true; fi
+          {
+            echo "exists=${exists}"
+            echo "build=${build}"
+            echo "push=${push}"
+          } >> "${GITHUB_OUTPUT}"
+          if [ "${exists}" = true ]; then
+            msg="${IMAGE}:${VERSION} is already published: nothing to build. Bump docker/omics/VERSION to release a new version."
+            if [ "${build}" = true ]; then msg="${msg} force_rebuild is set: rebuilding and smoke-testing without pushing."; fi
+            echo "::notice::${msg}"
+            echo "${msg}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "${IMAGE}:${VERSION} does not exist yet: building and publishing."
+          fi
+
       - name: Free runner disk space
+        if: steps.gate.outputs.build == 'true'
         uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
         # The final image is ~15-20 GB; building plus smoke test plus push needs ~45 GB free.
         with:
@@ -43,6 +97,7 @@ jobs:
           swap-storage: true
 
       - name: Check free disk space
+        if: steps.gate.outputs.build == 'true'
         run: |
           df -h / /mnt
           avail="$(df --output=avail -BG / | tail -1 | tr -dc 0-9)"
@@ -51,37 +106,16 @@ jobs:
             exit 1
           fi
 
-      - name: Read version
-        run: |
-          version="$(tr -d '[:space:]' < docker/omics/VERSION)"
-          [ -n "${version}" ] || { echo "docker/omics/VERSION is empty" >&2; exit 1; }
-          echo "VERSION=${version}" >> "${GITHUB_ENV}"
-          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "${GITHUB_ENV}"
-
       - name: Log in to ghcr.io
+        if: steps.gate.outputs.push == 'true'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Fail if this version is already published
-        run: |
-          rc=0
-          out="$(docker manifest inspect "${IMAGE}:${VERSION}" 2>&1)" || rc=$?
-          if [ "${rc}" -eq 0 ]; then
-            echo "::error::${IMAGE}:${VERSION} already exists; VERSION tags are immutable. Bump docker/omics/VERSION."
-            exit 1
-          fi
-          if printf '%s' "${out}" | grep -qiE 'no such manifest|manifest unknown|name unknown|not found'; then
-            echo "${IMAGE}:${VERSION} does not exist yet: OK to publish."
-          else
-            echo "::error::could not tell whether ${IMAGE}:${VERSION} exists:"
-            printf '%s\n' "${out}"
-            exit 1
-          fi
-
       - name: Set up Docker Buildx
+        if: steps.gate.outputs.build == 'true'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         # The docker driver builds straight into the local image store, so the ~20 GB image
         # is not stored twice (BuildKit cache volume plus loaded image). No cache export is used.
@@ -89,6 +123,7 @@ jobs:
           driver: docker
 
       - name: Build image (not pushed yet)
+        if: steps.gate.outputs.build == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: docker/omics
@@ -102,12 +137,15 @@ jobs:
             ${{ env.IMAGE }}:sha-${{ env.SHORT_SHA }}
 
       - name: Smoke test
+        if: steps.gate.outputs.build == 'true'
         run: docker run --rm --platform linux/amd64 "${IMAGE}:${VERSION}" /opt/omics/smoke_test.sh
 
       - name: Disk usage before push
+        if: steps.gate.outputs.build == 'true'
         run: df -h /
 
       - name: Push
+        if: steps.gate.outputs.push == 'true'
         run: |
           docker push "${IMAGE}:${VERSION}"
           docker push "${IMAGE}:sha-${SHORT_SHA}"

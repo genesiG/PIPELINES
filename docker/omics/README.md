@@ -2,11 +2,11 @@
 
 The lab's analysis toolbox as one Docker image: R, Python, NGS alignment and QC tools, MAGeCK, CRISPRO, ProTiler, and curated T2T-CHM13 annotations.
 
-Files in this folder: `Dockerfile`, `wrappers.txt` (command wrappers), `omics-slim-env` (image slimming script), `env/` (conda specs and locks), `DEVIATIONS.txt` and `SOURCES.txt` (machine-readable sources, kept in place), `annotations_README.txt` (T2T annotations), `VERSION`, `make_versions.py`, `smoke_test.sh`.
+Files in this folder: `Dockerfile`, `wrappers.txt` (command wrappers), `omics-slim-env` (image slimming script), `crispro-lowmem` (CRISPRO low-memory helper), `env/` (conda specs and locks), `DEVIATIONS.txt` and `SOURCES.txt` (machine-readable sources, kept in place), `annotations_README.txt` (T2T annotations), `VERSION`, `make_versions.py`, `smoke_test.sh`.
 
 ## What the image is
 
-- Image: `ghcr.io/genesig/omics:<VERSION>`. The current VERSION is 2026.10.0. Each release has a version tag and a `sha-<short>` tag.
+- Image: `ghcr.io/genesig/omics:<VERSION>`. The current VERSION is 2026.10.1. Each release has a version tag and a `sha-<short>` tag.
 - Platform: linux/amd64 only.
 - Base: Debian 12.15 slim, pinned by tag and digest. Environments are created with micromamba 2.0.5.
 - One conda environment per area under `/opt/envs` (six): `r`, `py`, `ngs`, `mageck`, `crispro`, `protiler`. Env `ngs` also holds what used to be env `qc` and env `ngspy`; see "Why some envs stay separate".
@@ -18,14 +18,14 @@ Files in this folder: `Dockerfile`, `wrappers.txt` (command wrappers), `omics-sl
 Docker (the working directory inside the container is `/work`):
 
 ```
-docker run --rm -v "$PWD":/work ghcr.io/genesig/omics:2026.10.0 <tool> [args]
-docker run --rm -v "$PWD":/work ghcr.io/genesig/omics:2026.10.0 samtools --version
+docker run --rm -v "$PWD":/work ghcr.io/genesig/omics:2026.10.1 <tool> [args]
+docker run --rm -v "$PWD":/work ghcr.io/genesig/omics:2026.10.1 samtools --version
 ```
 
 HPC with Apptainer (or Singularity, same arguments):
 
 ```
-apptainer exec docker://ghcr.io/genesig/omics:2026.10.0 <tool> [args]
+apptainer exec docker://ghcr.io/genesig/omics:2026.10.1 <tool> [args]
 ```
 
 ## Which env provides which command
@@ -44,8 +44,9 @@ Summary of `wrappers.txt`, grouped by env. Each name in the list is a wrapper in
 Notes:
 
 - `samtools`, `bgzip` and `tabix` come from `ngs` only.
+- `crispro-lowmem` is not in the table: it is a script (not a wrapper) that runs `crispro` on a cached per-gene subset of the annotation table; see "Running CRISPRO with little memory".
 - `cutadapt` comes from `ngs` (5.2). Env `crispro` has its own cutadapt 5.1, which CRISPRO uses internally.
-- To call an env's Python or another tool without the wrapper, use the full path, for example `/opt/envs/<env>/bin/python`. Example: `docker run --rm -v "$PWD":/work ghcr.io/genesig/omics:2026.10.0 /opt/envs/crispro/bin/python -c "import crispro"`. If a tool starts helper programs, put `/opt/envs/<env>/bin` first on `PATH`, as the wrappers do.
+- To call an env's Python or another tool without the wrapper, use the full path, for example `/opt/envs/<env>/bin/python`. Example: `docker run --rm -v "$PWD":/work ghcr.io/genesig/omics:2026.10.1 /opt/envs/crispro/bin/python -c "import crispro"`. If a tool starts helper programs, put `/opt/envs/<env>/bin` first on `PATH`, as the wrappers do.
 - The full list of packages and versions is in `/opt/omics/versions.tsv` (columns: env, package, version, build, channel).
 
 ## CRISPRO
@@ -53,13 +54,28 @@ Notes:
 - Usage: `crispro -h`.
 - The annotation table is required: pass `-a /opt/crispro/annotations/CRISPRO.GRCh37.ensembl90.20180901.csv.gz`. It is the GRCh37 (Ensembl 90) table. The image sets `CRISPRO_ANNOTATIONS=/opt/crispro/annotations`.
 - Memory: the annotation table has 48,357,758 rows and is 14.5 GB uncompressed. CRISPRO reads it in chunks of 10 million rows (`pd.read_csv` with `chunksize=10**7`) and keeps each chunk in memory as strings. Measured: 1.16 GB per million rows (DataFrame), so one chunk needs about 12 GB and the peak during parsing about 14 to 16 GB. A real CRISPRO run on the full table therefore needs roughly 16 GB of RAM available to the container (an estimate extrapolated from a 1-million-row measurement). On a laptop, raise the Docker Desktop memory to at least 16 GB (Settings > Resources, or `memory=` in `.wslconfig`), or run on the cluster with Apptainer.
-- For a single gene, make a one-gene subset of the table first (the smoke test does this for ENSG00000099956; it needs little RAM).
+- For a single gene, make a one-gene subset of the table first (the smoke test does this for ENSG00000099956; it needs little RAM), or use `crispro-lowmem`, which does this for you (see "Running CRISPRO with little memory" below).
 - Scores are passed as a CSV with `guide,score` columns (`--scores`).
 
 ```
 crispro -a /opt/crispro/annotations/CRISPRO.GRCh37.ensembl90.20180901.csv.gz \
         -i ENSG00000099956 --scores scores.csv -o out
 ```
+
+### Running CRISPRO with little memory
+
+`crispro-lowmem` (in `/usr/local/bin`; the script is `docker/omics/crispro-lowmem`) takes exactly the arguments of `crispro`. `-a` may be omitted when `$CRISPRO_ANNOTATIONS/CRISPRO.GRCh37.ensembl90.20180901.csv.gz` exists (it says so on stderr).
+
+```
+crispro-lowmem -i ENSG00000099956 --scores scores.csv -o out
+```
+
+- How it works: the identifiers are parsed with CRISPRO's own `getIdentifier` (id type from the first id: ENSG, ENST, ENSP, else gene name; `-i` may be a list or a file). The annotation table is streamed once through `awk` (about 41 s, 12 MB RAM), keeping the header and the rows whose id column matches, and `crispro` is run with `-a <subset>` appended. The subset has the rows CRISPRO would keep anyway (`loadCrispro` filters on the same column), and nothing downstream uses other rows.
+- Cache: the subset is kept in `$CRISPRO_LOWMEM_CACHE`, else `<outdir>/.crispro_lowmem` (when `-o` is given), else `${TMPDIR:-/tmp}/crispro_lowmem`. The key is the sorted ids, the id column and the annotation path, size and mtime, so a repeat run (or one with the same ids and `CRISPRO_LOWMEM_CACHE` set) skips the filter.
+- Checks and warnings: ids with no rows in the table give a WARNING on stderr (CRISPRO drops them silently); if none has rows the script stops with an error; mixed id types (for example ENSG with ENST) are refused with an error (CRISPRO would silently use the first id's type). A report line gives the id column, number of ids, rows kept, subset path and `cached` or `new`.
+- Measured (omics:2026.10.1, container with `--memory=3g`; peak RSS is the largest process of the tree, from `resource.getrusage`): the output tables (`*.csv`, `*.tsv`, `*.txt`, `crispro.log` excluded; 6 tables, 16 files in all for 1 gene, 100 files for 21 genes) are md5-identical between `crispro -a <subset>` and `crispro-lowmem` on the full table, for 1 gene (ENSG00000099956) and 21 genes, with ids as a list, as a file with a header, and when the cache was reused. The earlier investigation also found identical outputs for 60 genes. Peak RSS 182 MB (1 gene) and 336 MB (21 genes), the same as `crispro` on the subset, compared with about 11.5 to 16 GB for CRISPRO reading the full table. Wall time: 1 gene 10 s on a subset, 54 s with `crispro-lowmem` (43 s of filtering); 21 genes 82 s on a subset, 128 s with `crispro-lowmem` (42 s filtering), 79 s when the cache is reused.
+- Limits: FASTQ mode (`-f`) and `--color-structure` were not tested separately (they use the same filtered table). Mixed id types are refused. Excel id files need the readers of env `crispro`, as with `crispro`.
+- When to use it: laptops and containers with less than 16 GB RAM. With 16 GB or more, `crispro` on the full table works, but `crispro-lowmem` is also much faster to start for repeated runs.
 
 ## ProTiler
 
@@ -164,18 +180,32 @@ docker build --platform linux/amd64 -t omics:slim docker/omics
 docker run --rm --platform linux/amd64 omics:slim /opt/omics/smoke_test.sh
 ```
 
-To test the release name locally: `docker tag omics:slim ghcr.io/genesig/omics:2026.10.0`.
+To test the release name locally: `docker tag omics:slim ghcr.io/genesig/omics:2026.10.1`.
 
 - The image is about 15 GB uncompressed (6.5 GB compressed). The build needs roughly 45 to 50 GB of free disk (the env layers are large and temporary package caches are used).
 - micromamba can abort on Docker Desktop with "Unexpected error 9 on netlink descriptor". The Dockerfile retries each env three times.
-- The smoke test prints `ok` or `FAIL` per check and a failure count, and exits 1 if any check failed. It covers: tool versions; loading of every installed R package (503 packages); the hs1 and mm39 BSgenomes (and that the T2T BSgenome is absent); the T2T TxDb and md5 sums; python imports in `py`, `ngs`, `crispro`, `mageck` and `protiler`; pymol; every command in `/opt/omics/wrappers.txt` runs `--version`, `--help`, `-h` or no arguments without loader or import errors; a CRISPRO one-gene run; the ProTiler demo compared with the reference output; and the license files. Last result: 160 ok, 0 failures. `hisat2-inspect` is skipped (see Known limitations); all other wrapped commands are checked.
+- The smoke test prints `ok` or `FAIL` per check and a failure count, and exits 1 if any check failed. It covers: tool versions; loading of every installed R package (503 packages); the hs1 and mm39 BSgenomes (and that the T2T BSgenome is absent); the T2T TxDb and md5 sums; python imports in `py`, `ngs`, `crispro`, `mageck` and `protiler`; pymol; every command in `/opt/omics/wrappers.txt` runs `--version`, `--help`, `-h` or no arguments without loader or import errors; a CRISPRO one-gene run and the check that `crispro-lowmem` on the full table gives the same tables; the ProTiler demo compared with the reference output; and the license files. Last result: 162 ok, 0 failures. `hisat2-inspect` is skipped (see Known limitations); all other wrapped commands are checked.
 - Run the smoke test inside the container; it will not run on Windows.
+
+## Changelog
+
+### 2026.10.1
+
+- `crispro-lowmem` helper: runs `crispro` on a cached subset of the annotation table, with identical outputs and 0.2 to 0.35 GB instead of 11 to 16 GB of RAM.
+- CI version gate: a push without a VERSION bump no longer fails; the workflow builds only if the VERSION tag is not on GHCR.
+- Build check `env/check_bioc_installed.R`: env r is retried, and the build fails after 3 attempts, if any Bioconductor data package's post-link download from bioconductor.org failed silently (a local rebuild had lost reactome.db this way).
+
+### 2026.10.0
+
+- First release.
 
 ## Release
 
 1. Bump `docker/omics/VERSION`. Also set the `OMICS_VERSION` default in the Dockerfile to the same value (the Dockerfile comment asks for this).
 2. Merge to `main`.
-3. `.github/workflows/omics-image.yml` runs when `docker/omics/**` or the workflow changes on `main` (it can also be started by hand). It reads VERSION and fails if `ghcr.io/genesig/omics:<VERSION>` already exists, because VERSION tags are immutable. The job frees runner disk space first (free-disk-space action, including docker images) and fails early if less than 45 GB are free on `/`. It uses the buildx docker driver, so the image is built straight into the local image store and not stored twice, builds with `load: true`, runs the smoke test in the container, and pushes exactly two tags: `ghcr.io/genesig/omics:<VERSION>` and `ghcr.io/genesig/omics:sha-<short sha>`.
+3. `.github/workflows/omics-image.yml` runs when `docker/omics/**` or the workflow changes on `main` (it can also be started by hand). It reads VERSION and asks ghcr.io (anonymous token, manifest request) whether `ghcr.io/genesig/omics:<VERSION>` exists; VERSION tags are immutable. If it exists, the job builds and pushes nothing and finishes green with a notice. If the registry answer is neither 200 nor 404, the job fails. Otherwise the job frees runner disk space first (free-disk-space action, including docker images) and fails early if less than 45 GB are free on `/`. It uses the buildx docker driver, so the image is built straight into the local image store and not stored twice, builds with `load: true`, runs the smoke test in the container, and pushes exactly two tags: `ghcr.io/genesig/omics:<VERSION>` and `ghcr.io/genesig/omics:sha-<short sha>`.
+
+Bump `VERSION` to publish; a push that does not change VERSION (for example doc-only changes) does not rebuild or publish anything: the workflow sees that ghcr.io/genesig/omics:<VERSION> already exists and finishes early. To rebuild and smoke-test an already published version, start the workflow by hand with `force_rebuild` (it never pushes in that case).
 
 Note: the disk-space step has not been run on GitHub yet (actionlint 1.7.12 passes).
 
