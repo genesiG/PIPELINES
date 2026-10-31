@@ -24,7 +24,7 @@
 #   --svg-device=svglite              svglite (real <text>, default) or cairo (legacy, glyph outlines)
 #   --font=Helvetica --show-rownames=FALSE --angle-col=90 --cluster-rows=TRUE --treeheight-row= --treeheight-col=
 #                                     (empty treeheight = pheatmap default)
-#   --color-down=#46627A --color-mid=white --color-up=#8c6bb1    (legacy palette: #4d004b - white - goldenrod)
+#   --color-down=#46627A --color-mid=white --color-up=#88419d    (legacy palette: #4d004b - white - goldenrod)
 #   --out-dir=.
 # Genes: effect != "NS" in the results table (and in --gene-set when given), in the row order of the transformed counts
 #   table (NOT the results order, as the Rmd). pheatmap(scale = "row", clustering_distance_rows = "euclidean",
@@ -65,7 +65,7 @@ height <- as_num(opt_get(opt, "height", "4.5"), "height")
 title <- opt_get(opt, "title", "DEGs (N = {n})")
 color_down <- opt_get(opt, "color-down", "#46627A")
 color_mid <- opt_get(opt, "color-mid", "white")
-color_up <- opt_get(opt, "color-up", "#8c6bb1")
+color_up <- opt_get(opt, "color-up", "#88419d")
 out_dir <- opt_get(opt, "out-dir", ".")
 set_font(opt)
 show_rownames <- as_bool(opt_get(opt, "show-rownames", "FALSE"), "show-rownames")

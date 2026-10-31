@@ -87,6 +87,7 @@ featurecounts_args: ''                   # extra featureCounts arguments, append
 # deg_color_up: '#8c6bb1'
 # deg_color_ns: gray
 # deg_color_mid: white                   # heatmap midpoint
+# deg_heatmap_color_up: '#88419d'        # heatmap high end (volcano/MA use deg_color_up)
 # deg_color_by: ''                       # metadata column that colours the QC plots ('' = first design variable)
 # deg_mds_input: logcpm                  # logcpm | counts (raw counts as legacy, dominated by library size)
 # deg_mds_label_by: ''

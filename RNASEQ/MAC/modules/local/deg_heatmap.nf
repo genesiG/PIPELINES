@@ -16,7 +16,7 @@ process DEG_HEATMAP {
     path label_rules    // params.deg_label_rules, or an empty list when unset (nothing staged)
     path common         // bin/deg_common.R, or the project's `deg_common` replacement
     val color_down      // params.deg_color_down
-    val color_up        // params.deg_color_up
+    val color_up        // params.deg_heatmap_color_up
     val color_mid       // params.deg_color_mid
     path step_script    // bin/deg_heatmap.R, or the project's `deg_heatmap` script replacement
 

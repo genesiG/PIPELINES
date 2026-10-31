@@ -242,7 +242,7 @@ def degConfig(sheet, sheetHeader) {
     ['deg_volcano_xlim', 'deg_volcano_ylim', 'deg_volcano_common_xlim', 'deg_volcano_common_ylim'].each { k ->
         if (!limitsOk(params[k])) errs << "${k}: '${textOf(params[k])}' must be empty or two numbers 'min,max' with min < max"
     }
-    ['deg_color_down', 'deg_color_up', 'deg_color_ns', 'deg_color_mid'].each { k ->
+    ['deg_color_down', 'deg_color_up', 'deg_color_ns', 'deg_color_mid', 'deg_heatmap_color_up'].each { k ->
         if (!textOf(params[k])) errs << "${k} is empty (a colour name or a hex code such as '#8c6bb1')"
     }
     if (!textOf(params.deg_sample_col)) errs << "deg_sample_col is empty (the metadata column holding the sample names)"
@@ -723,7 +723,7 @@ workflow {
                         def one = [results].flatten().find { f -> f.name == "results_${h.comparison}.csv" }
                         tuple(h.findAll { k, v -> k != 'gene_set' }, one, rcounts, h.gene_set ? file(h.gene_set) : [])
                     }
-                DEG_HEATMAP(heatmap_rows, label_rules_in, sc.deg_common, textOf(params.deg_color_down), textOf(params.deg_color_up),
+                DEG_HEATMAP(heatmap_rows, label_rules_in, sc.deg_common, textOf(params.deg_color_down), textOf(params.deg_heatmap_color_up),
                             textOf(params.deg_color_mid), sc.deg_heatmap)
             }
 

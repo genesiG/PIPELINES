@@ -460,7 +460,8 @@ in YAML (`'#46627A'`): an unquoted `#` starts a comment.
 | `deg_shrink_type` | `ashr` | `ashr`, `apeglm` (coef rows only) or `none`. |
 | `deg_sval_threshold` | `0.005` | s-value cut-off of the shrunk effect. |
 | `deg_transform_method`, `deg_transform_blind` | `rlog`, `false` | Transformation for heatmaps and gene plots (`rlog` or `vst`). |
-| `deg_color_down`, `deg_color_up`, `deg_color_ns`, `deg_color_mid` | `'#46627A'`, `'#8c6bb1'`, `gray`, `white` | Volcano / MA / heatmap colours. |
+| `deg_color_down`, `deg_color_up`, `deg_color_ns`, `deg_color_mid` | `'#46627A'`, `'#8c6bb1'`, `gray`, `white` | Volcano / MA / heatmap colours (the heatmap's high end is `deg_heatmap_color_up`). |
+| `deg_heatmap_color_up` | `'#88419d'` | DEG heatmap high z-score colour. |
 | `deg_color_by` | `''` | Metadata column that colours the QC plots; blank = the first design variable of the first model. |
 | `deg_mds_input` | `logcpm` | `logcpm` (log2 CPM, prior count 2) or `counts` (raw counts as the legacy MDS, dominated by library size). |
 | `deg_mds_label_by`, `deg_mds_legend_title` | `''` | Point labels of the MDS plot; legend title (blank = the colour-by column). |
