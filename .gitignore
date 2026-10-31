@@ -1,0 +1,48 @@
+# Session handoffs (local notes for Claude sessions; not part of the pipelines)
+handoffs/
+
+# Legacy cluster scripts fetched for reference (HPC paths; not part of the pipelines)
+CHROMATIN_PROFILING/fetched_scripts/
+
+# Python bytecode from local test runs
+__pycache__/
+*.pyc
+
+# HPC hand-over bundles (2026-10-29): pristine HPC repos, benchmarks (FASTQs), references, images.
+# The pipelines themselves live in <PIPELINE>/{HPC,WINDOWS,MAC}; these stay local only.
+RNASEQ/RNASEQ/
+RNASEQ/RNASEQ.gitbundle
+RNASEQ/benchmark/
+RNASEQ/references/
+RNASEQ/containers_lock/
+RNASEQ/md5/
+ATACSEQ/ATACSEQ/
+ATACSEQ/ATACSEQ.gitbundle
+ATACSEQ/benchmark/
+ATACSEQ/references/
+ATACSEQ/containers_lock/
+ATACSEQ/md5/
+
+# Local build scratch for container images (not part of the pipelines)
+containers_build/
+
+# Internal build / port / developer material: kept on disk, not published
+INTERNAL_NOTES.md
+HANDOFF_*.md
+*README_TRANSFER.md
+*_git_state.txt
+*/lab/NEXTFLOW_PORTING_GUIDE.md
+*/lab/rephilllab_bin_listing.txt
+*/HPC/AGENTS.md
+*/HPC/CLAUDE.md
+*/HPC/docs/*
+!*/HPC/docs/scale_factor_schema.md
+*/HPC/containers/README.md
+*/HPC/containers/OMICS_R_BUILD.md
+*/HPC/containers/build.sh
+*/HPC/containers/build-omics-r.sh
+*/HPC/tests/
+*/MAC/tests/
+*/WINDOWS/tests/
+*/*/bin/tests/
+*/tools/

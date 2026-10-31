@@ -1,0 +1,42 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.10
+
+%setup
+    # Required on PMACS: the build command binds /usr/lib64/ossl-modules (FIPS), the bind target must exist
+    mkdir -p ${APPTAINER_ROOTFS}/usr/lib64/ossl-modules
+
+%files
+    cutandrun-r.env.yml /opt/cutandrun-r.env.yml
+
+%labels
+    Description CUT&RUN R/Bioconductor environment (csaw, edgeR, ChIPseeker, ChIPseqSpikeInFree)
+    R_VERSION 4.3.3
+    BIOC_RELEASE 3.18
+    CSAW_VERSION 1.36.0
+    EDGER_VERSION 4.0.16
+    CHIPSEEKER_VERSION 1.38.0
+    CHIPSEQSPIKEINFREE_VERSION 1.2.4
+    CHIPSEQSPIKEINFREE_COMMIT f9cc88f618121e1a3bc075de49188f70179ff90a
+
+%post
+    set -e
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    # micromamba root prefix in mambaorg/micromamba is /opt/conda (MAMBA_ROOT_PREFIX)
+    micromamba install -y -n base -f /opt/cutandrun-r.env.yml && micromamba clean -a -y
+    export PATH=/opt/conda/bin:$PATH
+    Rscript -e 'remotes::install_github("stjude/ChIPseqSpikeInFree@f9cc88f618121e1a3bc075de49188f70179ff90a", upgrade="never", dependencies=FALSE)'
+    Rscript -e 'v <- as.character(packageVersion("ChIPseqSpikeInFree")); if (v != "1.2.4") stop("ChIPseqSpikeInFree is ", v, ", expected 1.2.4")'
+
+%environment
+    export PATH=/opt/conda/bin:$PATH
+
+%test
+    set -e
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    export PATH=/opt/conda/bin:$PATH
+    ps --version
+    command -v SEACR_1.3.sh
+    Rscript -e 'cat("R", as.character(getRversion()), "\n")'
+    Rscript -e 'for (p in c("csaw", "edgeR", "limma", "Rsamtools", "GenomicRanges", "GenomicAlignments", "rtracklayer", "GenomicFeatures", "ChIPseeker", "EnrichedHeatmap", "ComplexHeatmap", "BiocParallel", "clusterProfiler", "org.Hs.eg.db", "Biostrings", "BSgenome.Hsapiens.NCBI.T2T.CHM13v2.0", "ChIPseqSpikeInFree")) cat(p, as.character(packageVersion(p)), "\n")'
+    samtools --version | head -n 1
+    bedtools --version

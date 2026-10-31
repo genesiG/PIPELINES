@@ -1,0 +1,67 @@
+# Example config for GG_EZH2i_RNAseq (legacy project /path/to/GG_EZH2i_RNAseq, newest RNA-seq run 2026-08), Docker version
+# for Mac; flat key: value, read by run_rnaseq.sh (the launcher). Samples: samplesheet.csv (12 libraries, DIPGVI). Reference:
+# T2T-CHM13v2.0. Paired-end only. All paths below are placeholders (/Volumes/... and /Users/you/...): replace them with the
+# paths on your Mac.
+#
+# Legacy GG parameters and tool versions (Scripts/, batch files under Analysis_Data/*/log and Importable_Data/trimmed/log):
+# Trimming (step_1_trimmomatic.py): Trimmomatic 0.40 PE; ILLUMINACLIP:TruSeq3-PE-2.fa:2:30:10:8:True MINLEN:25.
+# Alignment (step_2_align_hisat2.py): HISAT2 2.2.1, hisat2 -p -q --dta --no-discordant --no-mixed --summary-file;
+#   no --no-unal (unmapped reads kept); no --rna-strandness.
+# BAM filter (step_3_process_bam.py): samtools view -q 30 -f 1 -f 2 -F 4 -F 8 -F 256 -F 512 -F 1024 -F 2048 (samtools 1.23
+#   for the filter, 1.22.1 for align and sort); chrM removed by step_3 (see remove_chroms below).
+# Duplicates (step_3, block E): Picard 2.27.5 MarkDuplicates, mark only: OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500
+#   REMOVE_DUPLICATES=false. featureCounts still counts all reads.
+# Counting (step_4_count_reads.py): featureCounts 2.1.1 -p --countReadPairs -B -C --primary -F GTF -t exon -g gene_id,
+#   no -s (unstranded).
+# Merge (step_5_summarize_reads.py): inner merge on Gene, columns sorted by sample name; the `.R1` suffix on every column
+#   is a legacy artefact that the pipeline does not write (README, legacy comparison).
+# QC tools: FastQC 0.12.1 (both reads here; legacy: trimmed R1 only), MultiQC 1.35, RSeQC infer_experiment (new, the
+#   strandedness check).
+#
+# The value on each line is the setting this example uses: the latest legacy value, or the pipeline default where the
+# pipeline deliberately differs from legacy. A comment after a key gives the legacy value and the toggle that reproduces it.
+project_name: GG_EZH2i_RNAseq
+samplesheet: samplesheet.csv
+
+# Not used by this version: the FASTQs are named in samplesheet.csv (fastq_1 / fastq_2) and are never moved or copied.
+fastq_dir: null
+outdir: ./results
+metadata_dir: ./metadata
+intermediate_dir: ./intermediate_files
+publish_mode: copy             # Docker version: copy (as in the other lab Docker example projects)
+
+hisat2_index: /Users/you/REFERENCES/hisat2/t2t/chm13-2   # HISAT2 index PREFIX; the files are chm13-2.1.ht2 .. chm13-2.8.ht2 (legacy -x)
+gtf: /Users/you/REFERENCES/genomes/t2t/t2t.ncbiRefSeq.curated.norandom.gtf   # featureCounts GTF (legacy -a) and the RSeQC gene model
+
+strandedness: unstranded    # legacy featureCounts without -s (= 0). The automatic check reports the RSeQC call per sample.
+mapq: 30                    # legacy samtools view -q 30 (the pipeline default)
+mark_duplicates: true       # legacy Picard MarkDuplicates, mark only
+remove_duplicates: false    # legacy REMOVE_DUPLICATES=false; true removes the duplicates from the BAM before counting
+remove_chroms: ''           # legacy step_3 removed chrM; chrM is kept here. remove_chroms: chrM reproduces the legacy BAMs
+                            # and has no effect on T2T counts (the curated T2T GTF has no chrM features).
+trim_adapter_set: TruSeq3-PE-2   # legacy Trimmomatic adapter file (the pipeline default)
+trim_steps: ''              # legacy: no extra Trimmomatic steps
+
+# ---- Differential expression (DESeq2), a port of the legacy Scripts/step_6_deg_analysis.Rmd ---------------------------------------
+# Runs after the counts table of this run. The defaults reproduce the Rmd; only the settings below differ from them.
+# The comparisons (the 6 treatment contrasts), the heatmap, the group colours and the
+# heatmap label rules are the CSV files next to this config. deg_metadata.csv is the Rmd's sample metadata (the samplesheet's
+# `treatment` column holds only 1uM/DMSO, the Rmd's `treatment` is target_drug, e.g. CBX2_1uM).
+run_deg: true
+deg_comparisons: deg_comparisons.csv
+deg_heatmaps: deg_heatmaps.csv
+deg_colors: deg_colors.csv
+deg_label_rules: deg_label_rules.csv
+deg_metadata: deg_metadata.csv
+deg_reference_levels: treatment=LUC_DMSO,drug=DMSO,target=LUC
+deg_color_by: treatment
+deg_label_genes: CDKN2A
+deg_volcano_xlim: -5.5,5.5
+deg_volcano_ylim: 0,26
+deg_volcano_common_xlim: -5,5
+deg_volcano_common_ylim: 0,28
+# Look settings of the DEG figures (all optional; defaults = the legacy Rmd look, font Helvetica). Example: no legend, bigger label, no ring change:
+# deg_volcano_args: "--legend=FALSE --label-size=5 --label-nudge-y=1.5 --width=4 --height=4"
+# deg_heatmap_args: "--angle-col=45"     deg_qc_args: "--font=Helvetica --mds-cex=1"
+# New volcano colours (down #46627A, up #8c6bb1) are the defaults; the legacy volcano used #810f7c (up) and gray. To reproduce it:
+# deg_color_down: '#46627A'   and   deg_color_up: '#810f7c'   (quote hex codes: '#' starts a YAML comment)

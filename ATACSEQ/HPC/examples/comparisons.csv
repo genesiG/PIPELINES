@@ -1,0 +1,2 @@
+name,case,control,group_column,block_column,case_peaks,control_peaks,pooled,fixed_dispersion
+condition_2_vs_condition_1,condition_2,condition_1,condition,,,,false,

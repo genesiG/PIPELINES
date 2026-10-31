@@ -1,0 +1,4 @@
+heatmap,regions,samples,labels,window_bp,bin_bp,sort_using,cluster_k,z_min,z_max,y_max,colors,engine,cluster_samples,cluster_labels,legend_title,region_labels
+WT_K27me3_heatmap,WT_K27me3,"K27me3_WT_rep1,K27me3_WT_rep2","K27me3 rep1,K27me3 rep2",2000,50,K27me3_WT_rep1,,0,10,,"#8c96c6,#88419d",deeptools,,,,
+WT_K27me3_clustered,WT_K27me3,"K27me3_WT_rep1,K27me3_WT_rep2","K27me3 rep1,K27me3 rep2",2000,50,,2-4,,,,"#8c96c6,#88419d",deeptools,,,,
+WT_K27me3_enriched,WT_K27me3,"K27me3_WT_rep1,K27me3_WT_rep2","K27me3\nrep1,K27me3\nrep2",2000,50,K27me3_WT_rep1,3,,,,"#8c96c6,#88419d",enrichedheatmap,,"low,mid,high",,

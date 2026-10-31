@@ -1,0 +1,3 @@
+peakset,target_group,control_group,small_filt,large_filt,merge_bp,max_width,fdr,lfc
+DMSO_K27me3,DMSO_K27me3,DMSO_IgG,,,,,,
+DMSO_K27me2,DMSO_K27me2,DMSO_IgG,,,,,,

@@ -1,0 +1,210 @@
+# config.yaml
+# Edit the values below; do NOT edit examples/config.yaml itself for a real run.
+# Every key has a default in the pipeline's nextflow.config; list only what you change.
+#
+# Directory convention (same across every lab pipeline):
+#   samplesheet.csv, norm_runs.csv, peaksets.csv  your own small input CSVs —
+#                                live at the project root (this file too), not nested
+#   original_data/fastq/        per-sample FASTQs (optional; samplesheet.csv may point elsewhere)
+#   metadata/                   pipeline-generated run bookkeeping (not this
+#                                pipeline's own inputs)
+#   intermediate_files/         large per-sample intermediates (trimmed FASTQ, unfiltered and filtered BAMs, bedGraphs, bin counts), only with publish_intermediates: true
+#   results/<step>/             final outputs, one subfolder per pipeline step
+
+# Prefix used for the QC report and other project-level outputs
+project_name: my_cutandrun
+
+# ---- Inputs ------------------------------------------------------------------
+samplesheet: samplesheet.csv   # CSV: sample_id,fastq_1,fastq_2,bam,antibody,condition,replicate,control_id,group,norm_run,exclude
+                               #   fastq_1/fastq_2 absolute paths, OR bam (pre-aligned final-filtered BAM)
+norm_runs: norm_runs.csv       # CSV: norm_run,method,bin_size,cutoff,max_turns (+ optional min_first_turn: chipseqspikeinfree, blank = 0.5 package default; + optional ref_condition: reference condition of the MA plots)
+peaksets: peaksets.csv         # CSV: peakset,target_group,control_group,small_filt,large_filt,merge_bp,max_width,fdr,lfc (blank threshold cells: csaw_defaults[antibody], then csaw_<col>)
+classifications: classifications.csv  # CSV: classification,regions,ref_group,treat_group,norm_run,lfc_retained,lfc_lost,fdr (used when run_classify: true)
+heatmaps: heatmaps.csv         # CSV: heatmap,regions,samples,labels,window_bp,bin_bp,sort_using,cluster_k,z_min,z_max,y_max,colors,engine (+ optional cluster_samples,cluster_labels,legend_title,region_labels) (used when run_heatmaps: true); regions may be a quoted comma list; z_max/y_max accept auto (deeptools engine only)
+tracks: tracks.csv             # CSV: track_set,locus_or_gene,flank,samples,labels,colors,max_value,beds,scalebar (+ optional log2ratio,bed_colors,bed_labels) (used when run_tracks: true); max_value accepts number|auto|group:NAME|blank
+intersects: intersects.csv     # CSV: name,bed_a,bed_b,label_a,label_b,min_overlap,reciprocal[,output] (used when run_intersect: true)
+# Not used by this version: the FASTQs are named in samplesheet.csv (fastq_1 / fastq_2) and
+# are never moved or copied; the launcher mounts them read-only where they are. Leave null.
+fastq_dir: null
+
+# ---- Output / directory convention ---------------------------------------
+outdir: ./results
+metadata_dir: ./metadata
+intermediate_dir: ./intermediate_files
+publish_intermediates: false   # true = publish the trimmed FASTQs, unfiltered aligned BAMs, filtered BAMs, SEACR bedGraphs and BIN_COUNTS tables to intermediate_dir; false = keep them only in the work folder (kept while keep_work: true)
+publish_mode: auto             # auto = hard links from the work folder when possible, else copies (with work_volume: true: copies) | copy | link | symlink | rellink (symlink/rellink/link need work_volume: false; symlink/rellink make results/ point into the work folder and force keep_work on)
+
+# ---- This computer (Docker versions only; read by run_cutandrun) ---------------------
+# max_cpus: 8                  # CPU cores one analysis may use; default (line absent) = all cores but 1-2, never more than Docker allows
+# max_memory_gb: 32            # memory (GB) one analysis may use; default = at most 75% of the computer's memory, leaving 3 GB to the system, never more than Docker allows
+# wsl_resize: true            # Windows only: false = never let the launcher change the WSL memory limit (same as run_cutandrun --no-wsl-resize)
+keep_work: true                # true = keep the work folder and resume cache after a successful run so the next run resumes; false = delete them after a successful run, the Docker volume too with work_volume: true (the next run then recomputes every step)
+work_volume: true              # true = Nextflow's work folder and resume cache in a Docker volume on Docker's disk (fast; publish_mode auto then means copy); false = metadata\work and metadata\.nextflow in the project folder, as before (switching loses resume)
+
+# ---- Assay and reference -----------------------------------------------------
+experiment: cutandrun          # cutandrun | cutandtag (selects the trimmomatic adapter file)
+genome_index: /path/to/genome_index_prefix   # bowtie2 index PREFIX of the combined target + spike-in genome
+chrom_sizes: /path/to/chrom.sizes
+blacklist: /path/to/blacklist.bed
+gtf: /path/to/genes.gtf
+tss_bed: /path/to/tss.bed   # fallback for TSS enrichment; only needed when gtf is not set
+spike_prefix: ecoli_chr        # contig-name prefix of the spike-in genome
+mito_chrom: chrM
+effective_genome_size: 3100000000   # T2T-CHM13 (MACS3 -g)
+paired_end: true               # paired-end only in stage 1a
+
+# ---- Trimming and alignment --------------------------------------------------
+trim: true
+trim_minlen: 25
+bowtie2_mode: local            # local | end_to_end
+bowtie2_minins: null  # null = bowtie2 default -I 0
+bowtie2_maxins: null  # null = bowtie2 default (-I 0 / -X 500), as in the manuscript; alternative: 10 / 700 (2026-10 test runs)
+mapq: 30
+
+# ---- Duplicates ----------------------------------------------------------------
+remove_duplicates: true        # IgG is always deduplicated
+spikein_dedup: true
+
+# ---- Normalisation ---------------------------------------------------------------
+normalisation: chipseqspikeinfree   # chipseqspikeinfree | spikein | tmm | cpm (informational; norm_run in samplesheet.csv decides)
+tmm_bin_size: 10000            # also the bins of the normalisation QC and (repcor_bin_size null) the replicate metrics
+# `method` in norm_runs.csv is the run's PRIMARY method (only it scales the bigWigs and the classification). Every run
+# with >= 2 libraries also computes the methods below as diagnostics (scale_factors_all.tsv, MA plots).
+norm_methods: 'chipseqspikeinfree,tmm,cpm'   # '' = primary only
+norm_spikein: false            # true = also physical spike-in factors (unavailable for runs with pre-aligned BAMs)
+csif_bin_size: 10000           # ChIPseqSpikeInFree settings when it is a diagnostic and the norm_runs.csv cells are blank
+csif_cutoff: 1.2
+csif_max_turns: 0.99
+norm_qc_min_count: 20          # MA plots: minimum fragments summed over the two libraries of a pair
+norm_qc_prior: 0.5             # MA plots: prior count of the log2 CPM (the reference lines do not depend on it)
+norm_qc_panels_per_page: 12    # MA panels per SVG page
+
+# ---- Replicate concordance (qc/replicate_correlation/) ----------------------------
+run_replicate_correlation: true
+repcor_bin_size: null          # null = tmm_bin_size
+repcor_prior: 2                # prior count of the Pearson log2 CPM
+repcor_signal_frac: 0.10       # fraction of bins (highest mean signal) of the signal-bin metrics
+run_deeptools_correlation: true   # deepTools all-sample Spearman heatmap (qc/correlation/)
+
+# ---- bigWig tracks -----------------------------------------------------------
+bigwig_bin_size: 10
+bigwig_extend_reads: true
+bigwig_units: rpkm             # rpkm | cpm | none
+run_log2ratio: false
+
+# ---- Peaks: csaw (default) -----------------------------------------------------
+call_peaks: true               # false = no peak calling at all (csaw, csaw cutoff scan, MACS3, SEACR, FRiP, peak QC, peak annotation); bigWigs, normalisation and QC still run; heatmaps/tracks/classifications/intersects must then use BED paths, not peak set names
+run_csaw: true
+csaw_window: 150
+csaw_spacing: 50
+csaw_bin: 10000
+csaw_norm_bins: background     # background | all
+run_csaw_cutoff_scan: false    # optional post-hoc diagnostic
+csaw_scan_small_grid: '1,1.5,2,3'
+csaw_scan_large_grid: '0.5,1,1.5,2'
+# csaw thresholds for blank peaksets.csv cells.
+# Precedence per cell: non-blank peaksets.csv cell > csaw_defaults[antibody of target_group] > csaw_<col>.
+csaw_small_filt: 3
+csaw_large_filt: 1.5
+csaw_merge_bp: 50
+csaw_max_width: 0              # 0 = no limit
+csaw_fdr: 0.05
+csaw_lfc: 1
+csaw_defaults:                 # per-antibody fallbacks; key = samplesheet antibody of the target_group
+  K27me3: {small_filt: 3, large_filt: 1.5, merge_bp: 50}
+  K27me2: {small_filt: 2, large_filt: 1, merge_bp: 50}
+csaw_large_window: 2000
+csaw_large_spacing: 500
+csaw_bg_max_enrich: 1          # current script value
+csaw_count_filter: 10          # current script value (minimum summed count per window)
+csaw_max_frag: null            # null = bowtie2_maxins, else 500 (current behaviour); also the max.frag of the bin counts behind NORM_QC, TMM and the replicate metrics
+csaw_lfc_from: combined        # combined (legacy: combined-test rep.logFC) | best (best-window rep.logFC)
+csaw_disjoint_regions: false   # true makes merged regions disjoint (false = legacy)
+
+# ---- Peaks: region classification (run_classify; CSV classifications above) ----------
+run_classify: false            # classify the regions of each classifications.csv row as lost / retained / unclassified
+classify_lfc_retained: -1      # used when a classifications.csv lfc_retained cell is blank
+classify_lfc_lost: -2          # used when lfc_lost is blank
+classify_fdr: 0.05             # used when fdr is blank
+
+# ---- Peaks: broad vs narrow marks (MACS3 and SEACR) ---------------------------------
+# Antibodies called as broad (case-insensitive, histone prefix optional: K27me3 = H3K27me3). Sources: ENCODE histone
+# ChIP-seq broad list (https://www.encodeproject.org/chip-seq/histone/) + H3K27me2 (lab request) + H3K9me3 (ENCODE "exception",
+# broad for St. Jude). Any other antibody is narrow. Used by macs3_broad: auto and seacr_mode: auto.
+# broad_marks: 'H3K27me3,H3K27me2,H3K36me3,H3K4me1,H3K79me2,H3K79me3,H3K9me1,H3K9me2,H3K9me3,H4K20me1,H3F3A'
+
+# ---- Peaks: MACS3 (on by default) -------------------------------------------------
+# run_macs3 / run_seacr default to null (not set): on when every target has a control_id, otherwise skipped with a warning.
+# Set the key explicitly here and a missing control is an error. run_macs3: false turns MACS3 off.
+# run_macs3: true
+macs3_broad: auto              # auto = broad for broad_marks, narrow otherwise | true | false (force every group)
+macs3_qvalue: 0.01             # -q of narrow groups
+macs3_broad_cutoff: 0.1        # --broad-cutoff of broad groups (nf-core/cutandrun default)
+
+# ---- Peaks: SEACR (on by default) -------------------------------------------------
+# Lab policy: SEACR has no broad mode. relaxed = threshold between the knee and the peak of the total-signal curve,
+# stringent = the peak.
+# run_seacr: true
+seacr_mode: auto               # auto = relaxed for broad_marks, stringent otherwise | relaxed | stringent
+seacr_min_replicates: 2
+seacr_reciprocal_overlap: 0.5
+
+# ---- Samples kept in the samplesheet but skipped by all core steps ----------------
+skip_groups: ''               # comma list of `group` values
+
+# ---- Report ------------------------------------------------------------------------
+run_report: true
+heatmap_seed: 42               # seed of the heatmap k-means clustering
+# Heatmap styling (deepTools engine only; the values below reproduce the current figures)
+heatmap_reference_point: center   # center | TSS | TES
+heatmap_missing_as_zero: true     # false = missing data is not set to zero
+heatmap_average_type_bins: mean   # computeMatrix --averageTypeBins
+heatmap_plot_type: se             # plotHeatmap --plotType
+heatmap_average_type_summary: mean   # plotHeatmap --averageTypeSummaryPlot
+heatmap_height: 12                # figure height (cm)
+heatmap_width: 3.5                # figure width (cm)
+heatmap_x_label: 'distance (bp)'
+heatmap_ref_label: 'peak center'
+heatmap_y_label: null             # null = "normalised <bigwig_units>"
+heatmap_legend_location: none
+
+# ---- Optional steps (stage 2; see README "Heatmaps, tracks, annotation, intersections") ----
+run_heatmaps: false            # build the heatmaps listed in heatmaps (CSV above)
+run_tracks: false              # build the pyGenomeTracks figures listed in tracks (CSV above)
+run_annotation: false          # peak annotation (ChIPseeker) of the peak sets
+run_intersect: false           # build the BED intersections listed in intersects (CSV above)
+tracks_width: 15               # pyGenomeTracks figure width (cm)
+tracks_dpi: 600                # pyGenomeTracks figure resolution (dpi)
+tracks_max_value_default: shared   # max_value of a blank tracks.csv cell: shared (one range per antibody at each locus) | auto | a number
+# y-max statistic of the shared (group:) limits: mean_bins = max over the per-bin means of number_of_bins bins (EED rule) | max_bin = max over the locus window of the bigWig's own bins (CBX2 rule)
+tracks_limit_stat: mean_bins
+# pyGenomeTracks styling (current values as defaults)
+track_number_of_bins: 700
+track_height: 1.0              # sample bigWig track height
+track_fontsize: 14             # sample track titles
+track_bed_height: 0.1          # BED track height
+track_bed_color: '#8c96c6'     # BED colour when tracks.csv bed_colors is blank
+track_scalebar_fontsize: 16
+track_genes_height: 3
+track_log2_min: -6             # log2ratio tracks keep fixed limits (never shared)
+track_log2_max: 2
+annotation_colors: ''          # label=#RRGGBB,... ; label = peak set name (e.g. the csaw peakset name)
+# extra regions annotated next to the peak sets (comma list): csaw peak set names, class names (<id>.retained ...), intersect names or BED paths; label = the name, file stem for a BED path; empty = none
+annotation_extra_beds: ''
+annotation_kegg: true          # KEGG dotplot; false writes a placeholder page
+annotation_tss_region: 3000    # bp on each side of the TSS
+
+# ---- Peak QC tracks (automatic regions chosen from the peak sets; bin/peak_qc_regions.py; output results/tracks/peak_qc/) ----
+run_peak_qc: true              # on whenever a peak caller (run_csaw, run_macs3, run_seacr) makes peaks; skipped silently when there is no peak set; the figures also need run_tracks
+peak_qc_loci: ''               # your own loci, comma list of [NAME=]GENE|chr:s-e[:FLANK]; GENE may be a glob or A*|B alternatives (e.g. 'HOXA=HOXA*|HOTTIP|HOTAIRM1:150000,CDKN2A:125000'); '' = the default marker loci of Polycomb marks, none for other marks
+peak_qc_negative: auto         # negative-control locus: auto | none | GENE[:FLANK] | chr:s-e
+peak_qc_max_regions: 15        # cap on the number of regions (your own loci are never dropped)
+peak_qc_exclude_bed: null      # optional BED (or comma list) masked out of the peak-free high-signal tile search; set it to the general T2T blacklist to avoid satellite tiles
+peak_qc_nopeak_igg_max_fold: 1.5  # the peak-free high-signal tile excludes tiles whose IgG signal fold is above this; null or '' = off; only used when an IgG bigWig exists
+peak_qc_shape_marks: ''        # marks that get largest / median / densest regions (at most 3), comma list; '' = every mark (the first 3 when the run has more)
+
+# ---- Optional: change a step for THIS project only --------------------------------
+# Copy the step's script from the pipeline's bin\ folder (the folder of this pipeline version that run_cutandrun is run from; on Mac: bin/) into utils/,
+# edit it there, and add a line named after the script (without its extension):
+#   norm_tmm: utils/norm_tmm.R
+# Extra arguments without replacing the script:  <script name>_args: "..."

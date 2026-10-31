@@ -1,0 +1,14 @@
+work/
+.nextflow/
+.nextflow.log*
+.nextflow-bin/
+results/
+intermediate_files/
+metadata/
+nf_work/
+__pycache__/
+*.pyc
+
+# implementer backups
+Archive/
+hs_err_pid*.log

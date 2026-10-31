@@ -1,0 +1,87 @@
+# Example config for GG_EED_CUTANDRUN_example (legacy project GG_EED_CUTANDRUN); flat key: value, read by run_pipeline.sh.
+# Reference paths are taken from GG_EED_CUTANDRUN/Scripts/config.py (SPECIES = t2t_ecoli).
+#
+# ---- Latest legacy parameters (2026-10-26) -----------------------------------------------
+# Settings of the latest legacy GG_EED_CUTANDRUN runs: bigWigs 50 bp, RPKM, extendReads (2026-10-15); K27me2
+# normalisation of round 13 (2026-10-19); own-region csaw peaks, classes and QC tracks of round 14 (2026-10-22).
+# csaw normalises over all 10 kb bins (legacy normFactors; the pipeline default is `background`) with max.frag 500;
+# bowtie2 with no -I/-X (manuscript default: bowtie2 -X 500).
+# The value on each line is the latest legacy setting; a comment after a key lists the alternatives (toggles).
+project_name: GG_EED_CUTANDRUN_example
+samplesheet: samplesheet.csv
+norm_runs: norm_runs.csv   # K27me2 row = round 13 (50000/0.7/0.876). Alternative = round 12: replace the K27me2 row of norm_runs.csv by K27me2,chipseqspikeinfree,10000,0.7,0.844
+peaksets: peaksets.csv
+classifications: classifications.csv
+heatmaps: heatmaps.csv
+tracks: tracks.csv
+fastq_dir: null           # samplesheet carries absolute FASTQ paths (supported way for these examples)
+outdir: ./results
+metadata_dir: ./metadata
+intermediate_dir: ./intermediate_files
+publish_mode: copy
+
+experiment: cutandrun     # config.py EXPERIMENT
+genome_index: /path/to/mylibrary/bowtie2/t2t_ecoli/t2t_ecoli          # bowtie2 index PREFIX (T2T-CHM13 + E. coli spike-in)
+chrom_sizes: /path/to/mylibrary/chr_size/t2t_ecoli.chrom.sizes
+blacklist: /path/to/mylibrary/blacklist/t2t.blacklist.cut.and.run.bed # cutandrun variant
+gtf: /path/to/mylibrary/genomes/t2t/t2t.ncbiRefSeq.curated.norandom.gtf
+tss_bed: /path/to/mylibrary/genomes/t2t/t2t.curated.norandom.tss.bed
+spike_prefix: ecoli_chr
+mito_chrom: chrM
+effective_genome_size: 3100000000
+paired_end: true
+
+trim: true
+trim_minlen: 25
+bowtie2_mode: local
+bowtie2_minins: null  # null = bowtie2 default -I 0
+bowtie2_maxins: null  # null = bowtie2 default (-I 0 / -X 500), as in the manuscript; alternative: 10 / 700 (2026-10 test runs)
+mapq: 30                  # config.py MAPQ
+remove_duplicates: true   # config.py REMOVE_DUPLICATES (cutandrun)
+spikein_dedup: true       # config.py SPIKEIN_DEDUP (round 9: target + spike-in dedup)
+
+normalisation: chipseqspikeinfree     # config.py NORMALIZE_USING = CHIPSEQSPIKEINFREE; per-sample norm_run in samplesheet decides
+bigwig_bin_size: 50     # config.py BIN_SIZE (50 since 2026-10-15). Alternatives: 10 (before 2026-10-15), 100 (briefly, with cpm)
+bigwig_extend_reads: true
+bigwig_units: rpkm      # config.py BIGWIG_UNIT (RPKM since 2026-10-15). Alternative: cpm (briefly, with 100 bp bins)
+run_log2ratio: false
+tmm_bin_size: 10000
+norm_spikein: false  # TMM, CPM (norm_methods default) are computed as diagnostics next to the primary; true adds spike-in factors
+
+run_csaw: true
+csaw_defaults:            # per-antibody fallbacks for blank peaksets.csv threshold cells
+  K27me3: {small_filt: 3, large_filt: 1.5, merge_bp: 50}
+  K27me2: {small_filt: 2, large_filt: 1, merge_bp: 50}   # K27me2 large_filt: 1 (chosen) | 1.5 (acceptable) | 2 (rejected); legacy Logs/round14/k27me2_filter_sweep.tsv
+run_classify: true        # EZH2i vs DMSO classes of the two peak sets (classifications.csv)
+csaw_window: 150          # csaw_parameters.R width.small
+csaw_spacing: 50          # spacing.small
+csaw_bin: 10000           # bin.size
+csaw_norm_bins: all  # background = pipeline default
+csaw_max_frag: 500  # null = bowtie2_maxins
+run_csaw_cutoff_scan: false
+csaw_scan_small_grid: '1,1.5,2,3'
+csaw_scan_large_grid: '0.5,1,1.5,2'
+
+run_macs3: true
+macs3_broad: auto  # auto = broad for broad_marks (default list), narrow otherwise; true | false forces every group
+macs3_qvalue: 0.01
+macs3_broad_cutoff: 0.1
+run_seacr: true
+seacr_mode: auto  # auto = relaxed for broad_marks, stringent otherwise (SEACR has no broad mode); relaxed | stringent forces every group
+seacr_min_replicates: 2
+seacr_reciprocal_overlap: 0.5
+
+skip_groups: ""
+run_report: true
+run_heatmaps: true
+heatmap_y_label: 'sf x rpkm'   # null = normalised <bigwig_units> (pipeline default)
+run_tracks: true
+tracks_max_value_default: shared   # alternatives: auto (per-track autoscale) or a number (legacy fixed maxima: 100 K27me3, 32 K27me2)
+tracks_limit_stat: mean_bins  # default (EED 2026-10-22 rule); alternative max_bin
+# Peak QC tracks (run_peak_qc, default true): ~8-15 regions chosen automatically from the peak sets and drawn as track set peak_qc (results/tracks/peak_qc/, figures results/tracks/plots/peak_qc.NN_<label>.svg).
+# The two keys below are K27-mark (Polycomb) loci; they are only a project choice, other marks would take their own loci.
+peak_qc_loci: 'HOXA=HOXA*|HOTTIP|HOTAIRM1:150000,CDKN2A:125000'   # [NAME=]GENE|chr:s-e[:FLANK], comma list; '' = default marker loci
+peak_qc_negative: 'GAPDH:100000'   # negative-control locus; auto = chosen from the data, none = no negative
+run_annotation: false
+run_intersect: false
+heatmap_seed: 42

@@ -1,0 +1,13 @@
+sample_id,fastq_1,fastq_2,bam,exclude,cell_line,sgRNA,guide_replicate,treatment,drug,target
+DIPGVI_CBX2.1A_1uM,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.1A_1uM.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.1A_1uM.R2.fastq.gz,,false,DIPGVI,sgCBX2.1,A,1uM,1uM,CBX2
+DIPGVI_CBX2.1A_DMSO,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.1A_DMSO.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.1A_DMSO.R2.fastq.gz,,false,DIPGVI,sgCBX2.1,A,DMSO,DMSO,CBX2
+DIPGVI_CBX2.1B_1uM,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.1B_1uM.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.1B_1uM.R2.fastq.gz,,false,DIPGVI,sgCBX2.1,B,1uM,1uM,CBX2
+DIPGVI_CBX2.1B_DMSO,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.1B_DMSO.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.1B_DMSO.R2.fastq.gz,,false,DIPGVI,sgCBX2.1,B,DMSO,DMSO,CBX2
+DIPGVI_CBX2.3A_1uM,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.3A_1uM.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.3A_1uM.R2.fastq.gz,,false,DIPGVI,sgCBX2.3,A,1uM,1uM,CBX2
+DIPGVI_CBX2.3A_DMSO,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.3A_DMSO.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.3A_DMSO.R2.fastq.gz,,false,DIPGVI,sgCBX2.3,A,DMSO,DMSO,CBX2
+DIPGVI_CBX2.3B_1uM,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.3B_1uM.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.3B_1uM.R2.fastq.gz,,false,DIPGVI,sgCBX2.3,B,1uM,1uM,CBX2
+DIPGVI_CBX2.3B_DMSO,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.3B_DMSO.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_CBX2.3B_DMSO.R2.fastq.gz,,false,DIPGVI,sgCBX2.3,B,DMSO,DMSO,CBX2
+DIPGVI_LUCA_1uM,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_LUCA_1uM.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_LUCA_1uM.R2.fastq.gz,,false,DIPGVI,sgLUC,A,1uM,1uM,LUC
+DIPGVI_LUCA_DMSO,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_LUCA_DMSO.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_LUCA_DMSO.R2.fastq.gz,,false,DIPGVI,sgLUC,A,DMSO,DMSO,LUC
+DIPGVI_LUCB_1uM,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_LUCB_1uM.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_LUCB_1uM.R2.fastq.gz,,false,DIPGVI,sgLUC,B,1uM,1uM,LUC
+DIPGVI_LUCB_DMSO,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_LUCB_DMSO.R1.fastq.gz,/Volumes/SeqDrive/FASTQ/GG_EZH2i_RNAseq/DIPGVI_LUCB_DMSO.R2.fastq.gz,,false,DIPGVI,sgLUC,B,DMSO,DMSO,LUC

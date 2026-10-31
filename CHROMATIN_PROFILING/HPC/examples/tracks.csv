@@ -1,0 +1,2 @@
+track_set,locus_or_gene,flank,samples,labels,colors,max_value,beds,scalebar,log2ratio,bed_colors,bed_labels
+example_tracks,"GAPDH,ACTB","25000,25000","IgG_WT_rep1,K27me3_WT_rep1,K27me3_WT_rep2","IgG rep1,K27me3 rep1,K27me3 rep2","#999999,#8c96c6,#88419d",,WT_K27me3,10000,false,,

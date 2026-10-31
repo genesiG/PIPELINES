@@ -1,0 +1,80 @@
+# Example config for the nucleation analysis (legacy project); flat key: value, read by run_pipeline.sh.
+# Reference paths are taken from the legacy project's Scripts/config.py (SPECIES = t2t_ecoli).
+#
+# Latest legacy parameters (2026-10-26)
+# This config reproduces the latest NUCLEATION settings: plain RPKM bigWigs, norm_runs.csv method cpm; ChIPseqSpikeInFree is a diagnostic only, lab decision 2026-10-28; 50 bp RPKM bigWigs with
+# extended fragments; csaw peak sets TMM-normalised over all 10 kb bins with max.frag 500; bowtie2 with no -I/-X (manuscript default: bowtie2 -X 500); heatmaps with auto limits and a best-placed legend; tracks
+# with one shared y-range per mark. The K27MKO retained/lost classification BEDs and the BED intersections are
+# dropped: the legacy step_7d K27MKO classification is declared invalid.
+# Where legacy runs differed for a key, the alternatives are listed in a trailing comment (the toggle).
+project_name: nucleation_example
+samplesheet: samplesheet.csv
+norm_runs: norm_runs.csv
+peaksets: peaksets.csv
+heatmaps: heatmaps.csv
+tracks: tracks.csv
+fastq_dir: null           # samplesheet carries absolute FASTQ paths (supported way for these examples)
+outdir: ./results
+metadata_dir: ./metadata
+intermediate_dir: ./intermediate_files
+publish_mode: copy
+
+experiment: cutandrun     # config.py EXPERIMENT
+genome_index: /path/to/mylibrary/bowtie2/t2t_ecoli/t2t_ecoli          # bowtie2 index PREFIX (T2T-CHM13 + E. coli spike-in)
+chrom_sizes: /path/to/mylibrary/chr_size/t2t_ecoli.chrom.sizes
+blacklist: /path/to/mylibrary/blacklist/t2t.blacklist.cut.and.run.bed # cutandrun variant
+gtf: /path/to/mylibrary/genomes/t2t/t2t.ncbiRefSeq.curated.norandom.gtf
+tss_bed: /path/to/mylibrary/genomes/t2t/t2t.curated.norandom.tss.bed
+spike_prefix: ecoli_chr
+mito_chrom: chrM
+effective_genome_size: 3100000000
+paired_end: true
+
+trim: true
+trim_minlen: 25
+bowtie2_mode: local
+bowtie2_minins: null  # null = bowtie2 default -I 0
+bowtie2_maxins: null  # null = bowtie2 default (-I 0 / -X 500), as in the manuscript; alternative: 10 / 700 (2026-10 test runs); csaw max.frag follows unless csaw_max_frag is set
+mapq: 30                  # config.py MAPQ
+remove_duplicates: true   # config.py REMOVE_DUPLICATES (cutandrun)
+spikein_dedup: true       # config.py SPIKEIN_DEDUP (round 9: target + spike-in dedup)
+
+normalisation: chipseqspikeinfree     # informational: each norm_run's primary in norm_runs.csv is cpm (plain RPKM bigWigs, lab decision 2026-10-28); do NOT set cpm here: normalisation: cpm skips norm_runs.csv, so the ChIPseqSpikeInFree/TMM diagnostics would not be computed
+bigwig_bin_size: 50       # config.py BIN_SIZE; alternatives: 10 (before 2026-10-15), 100 (CPM, briefly 2026-10-15)
+bigwig_extend_reads: true
+bigwig_units: rpkm        # alternatives: cpm (before 2026-10-15), none
+run_log2ratio: false
+tmm_bin_size: 10000
+norm_spikein: false  # diagnostics next to the cpm primary: ChIPseqSpikeInFree, TMM (norm_methods default); true adds spike-in factors
+
+call_peaks: false   # nucleation needs bigWigs only: no peak calling, heatmaps or tracks
+run_csaw: true
+csaw_window: 150          # csaw_parameters.R width.small
+csaw_spacing: 50          # spacing.small
+csaw_bin: 10000           # bin.size
+csaw_norm_bins: all  # background = pipeline default (legacy callpeaks_csaw.R normalised over all 10 kb bins)
+csaw_max_frag: 500  # null = bowtie2_maxins
+run_csaw_cutoff_scan: false
+csaw_scan_small_grid: '1,1.5,2,3'
+csaw_scan_large_grid: '0.5,1,1.5,2'
+
+run_macs3: false  # nucleation needs bigWigs only
+macs3_broad: auto  # auto = broad for broad_marks (default list), narrow otherwise; true | false forces every group
+macs3_qvalue: 0.01
+macs3_broad_cutoff: 0.1
+run_seacr: false  # nucleation needs bigWigs only
+seacr_mode: auto  # auto = relaxed for broad_marks, stringent otherwise (SEACR has no broad mode); relaxed | stringent forces every group
+seacr_min_replicates: 2
+seacr_reciprocal_overlap: 0.5
+
+skip_groups: ""
+run_report: true
+run_heatmaps: false  # nucleation needs bigWigs only
+run_tracks: false  # nucleation needs bigWigs only
+run_annotation: false  # nucleation needs bigWigs only
+run_intersect: false      # legacy round-9 intersections need the dropped K27MKO classification BEDs
+heatmap_seed: 42
+heatmap_y_label: 'rpkm'     # alternatives: null (= normalised <bigwig_units>)
+heatmap_legend_location: best    # alternative: none (pipeline default)
+tracks_max_value_default: shared # alternatives: auto (per-track autoscale, the earlier pipeline behaviour), a number
+tracks_limit_stat: mean_bins     # alternative: max_bin (CBX2 2026-10-15 rule: max over the locus window of each bigWig's own bins)

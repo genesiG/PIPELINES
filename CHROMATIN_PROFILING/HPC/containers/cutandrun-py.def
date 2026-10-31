@@ -1,0 +1,45 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.10
+
+%setup
+    # Required on PMACS: the build command binds /usr/lib64/ossl-modules (FIPS), the bind target must exist
+    mkdir -p ${APPTAINER_ROOTFS}/usr/lib64/ossl-modules
+
+%files
+    cutandrun-py.env.yml /opt/cutandrun-py.env.yml
+
+%labels
+    Description CUT&RUN Python environment plus bowtie2/samtools/bedtools for the ALIGN step
+    PYTHON_VERSION 3.12.13
+    NUMPY_VERSION 2.4.6
+    PANDAS_VERSION 2.3.3
+    MATPLOTLIB_VERSION 3.8.4
+    SEABORN_VERSION 0.13.2
+    SKLEARN_VERSION 1.9.0
+    STATSMODELS_VERSION 0.14.6
+    PLOTLY_VERSION 6.6.0
+    PYBIGWIG_VERSION 0.3.25
+    PYGENOMETRACKS_VERSION 3.9
+    BOWTIE2_VERSION 2.5.5
+    SAMTOOLS_VERSION 1.23
+    BEDTOOLS_VERSION 2.31.1
+
+%post
+    set -e
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    # micromamba root prefix in mambaorg/micromamba is /opt/conda (MAMBA_ROOT_PREFIX)
+    micromamba install -y -n base -f /opt/cutandrun-py.env.yml && micromamba clean -a -y
+
+%environment
+    export PATH=/opt/conda/bin:$PATH
+
+%test
+    set -e
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    export PATH=/opt/conda/bin:$PATH
+    ps --version
+    python -c 'import sys, numpy, pandas, matplotlib, seaborn, sklearn, statsmodels, plotly, pyBigWig; print("python", sys.version.split()[0]); print("numpy", numpy.__version__); print("pandas", pandas.__version__); print("matplotlib", matplotlib.__version__); print("seaborn", seaborn.__version__); print("scikit-learn", sklearn.__version__); print("statsmodels", statsmodels.__version__); print("plotly", plotly.__version__)'
+    bowtie2 --version | head -n 1
+    samtools --version | head -n 1
+    bedtools --version
+    pyGenomeTracks --version

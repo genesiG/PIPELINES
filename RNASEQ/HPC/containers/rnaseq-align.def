@@ -1,0 +1,31 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.10
+
+%setup
+    # Required on PMACS: the build command binds /usr/lib64/ossl-modules (FIPS), the bind target must exist
+    mkdir -p ${APPTAINER_ROOTFS}/usr/lib64/ossl-modules
+
+%files
+    rnaseq-align.env.yml /opt/rnaseq-align.env.yml
+
+%labels
+    Description RNA-seq ALIGN step: HISAT2 2.2.1 piped to samtools 1.23 (view, sort, index)
+    HISAT2_VERSION 2.2.1
+    SAMTOOLS_VERSION 1.23
+
+%post
+    set -e
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    # micromamba root prefix in mambaorg/micromamba is /opt/conda (MAMBA_ROOT_PREFIX)
+    micromamba install -y -n base -f /opt/rnaseq-align.env.yml && micromamba clean -a -y
+
+%environment
+    export PATH=/opt/conda/bin:$PATH
+
+%test
+    set -e
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    export PATH=/opt/conda/bin:$PATH
+    hisat2 --version | head -n 1
+    samtools --version | head -n 1
+    ps --version

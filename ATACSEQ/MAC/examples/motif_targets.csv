@@ -1,0 +1,2 @@
+name,type,target,comparison,label,min_peaks
+target_gene,gene,GENE1,condition_2_vs_condition_1,,

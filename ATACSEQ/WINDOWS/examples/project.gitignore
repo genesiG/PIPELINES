@@ -1,0 +1,19 @@
+# .gitignore for an ATACSEQ project directory
+# Keeps the repo to config.yaml + your own input CSVs (samplesheet.csv,
+# peak_merges.csv) + examples/ — raw data, pipeline outputs, and
+# Nextflow's own runtime state are large, regenerable, and don't belong in
+# git history. (samplesheet.csv, peak_merges.csv and config.yaml
+# are deliberately NOT ignored: they stay tracked.)
+
+original_data/
+intermediate_files/
+results/
+# pipeline-generated run bookkeeping (logs, pipeline_info/) — regenerable
+metadata/
+
+nf_work/
+work/
+.nextflow/
+.nextflow.log*
+__pycache__/
+*.pyc

@@ -1,0 +1,21 @@
+# GG_EZH2i_RNAseq, differential expression only, from an existing counts table (no reads, no QC, no MultiQC).
+# Run it from this directory (it reads the DEG CSVs of the parent folder with ../ paths):
+# deg_counts: the pipeline's own counts table (columns = sample_id) from an earlier run of the parent project.
+project_name: GG_EZH2i_RNAseq
+run_deg: true
+deg_counts: /Users/you/RNASEQ/benchmark/full/results/counts/GG_EZH2i_RNAseq_counts.txt
+# The LEGACY matrix (Importable_Data/GG_EZH2i_RNAseq_counts.txt) has columns <sample>.R1: strip the suffix to match the metadata.
+# deg_counts: /Users/you/GG_EZH2i_RNAseq/Importable_Data/GG_EZH2i_RNAseq_counts.txt
+# deg_strip_suffix: '\.R1$'
+deg_metadata: deg_metadata.csv
+deg_comparisons: ../deg_comparisons.csv
+deg_heatmaps: ../deg_heatmaps.csv
+deg_colors: ../deg_colors.csv
+deg_label_rules: ../deg_label_rules.csv
+deg_reference_levels: treatment=LUC_DMSO,drug=DMSO,target=LUC
+deg_color_by: treatment
+deg_label_genes: CDKN2A
+deg_volcano_xlim: -5.5,5.5
+deg_volcano_ylim: 0,26
+deg_volcano_common_xlim: -5,5
+deg_volcano_common_ylim: 0,28

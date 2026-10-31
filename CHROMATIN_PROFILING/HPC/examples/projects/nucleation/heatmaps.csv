@@ -1,0 +1,7 @@
+heatmap,regions,samples,labels,window_bp,bin_bp,sort_using,cluster_k,z_min,z_max,y_max,colors,engine,cluster_samples,cluster_labels,legend_title
+K27MKO_K27me3_DMSO_peaks_10kb_k2,K27MKO_DMSO_K27me3,"K27MKO_DMSO_K27me3_A,K27MKO_500nM_K27me3_A","K27MKO\nDMSO,K27MKO\n500nM",10000,100,,2,"0,0",auto,auto,"#8c6bb1,#8c6bb1",deeptools,,,
+K27MKO_K27me3_DMSO_peaks_10kb_k3,K27MKO_DMSO_K27me3,"K27MKO_DMSO_K27me3_A,K27MKO_500nM_K27me3_A","K27MKO\nDMSO,K27MKO\n500nM",10000,100,,3,"0,0",auto,auto,"#8c6bb1,#8c6bb1",deeptools,K27MKO_DMSO_K27me3_A,,
+K27MKO_K27me3_DMSO_peaks_5kb_k2,K27MKO_DMSO_K27me3,"K27MKO_DMSO_K27me3_A,K27MKO_500nM_K27me3_A","K27MKO\nDMSO,K27MKO\n500nM",5000,100,,2,"0,0",auto,auto,"#8c6bb1,#8c6bb1",deeptools,,,
+K27MKO_K27me3_DMSO_peaks_5kb_k3,K27MKO_DMSO_K27me3,"K27MKO_DMSO_K27me3_A,K27MKO_500nM_K27me3_A","K27MKO\nDMSO,K27MKO\n500nM",5000,100,,3,"0,0",auto,auto,"#8c6bb1,#8c6bb1",deeptools,K27MKO_DMSO_K27me3_A,,
+K27MKO_K27me3_DMSO_peaks_2kb_k2,K27MKO_DMSO_K27me3,"K27MKO_DMSO_K27me3_A,K27MKO_500nM_K27me3_A","K27MKO\nDMSO,K27MKO\n500nM",2000,100,,2,"0,0",auto,auto,"#8c6bb1,#8c6bb1",deeptools,,,
+K27MKO_K27me3_DMSO_peaks_2kb_k3,K27MKO_DMSO_K27me3,"K27MKO_DMSO_K27me3_A,K27MKO_500nM_K27me3_A","K27MKO\nDMSO,K27MKO\n500nM",2000,100,,3,"0,0",auto,auto,"#8c6bb1,#8c6bb1",deeptools,K27MKO_DMSO_K27me3_A,,

@@ -1,0 +1,2 @@
+name,model,comparison,gene_set,clust_method,cutree_rows,col_swap,palette_n,fontsize,fontsize_row,width,height,title
+deg_ward.D2_linkage,treatment,CBX2_1uM_vs_LUC_DMSO,,,3,,,,,,,"DEGs / CBX2 + EZH2i vs DMSO (N = {n})"

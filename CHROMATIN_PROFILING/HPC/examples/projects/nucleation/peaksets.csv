@@ -1,0 +1,4 @@
+peakset,target_group,control_group,small_filt,large_filt,merge_bp,max_width,fdr,lfc
+K27MKO_DMSO_K27me3,K27MKO_DMSO_K27me3,K27MKO_DMSO_IgG,2,0.5,500,,0.1,1
+K27MKO_EZH2i_K27me3,K27MKO_EZH2i_K27me3,K27MKO_EZH2i_IgG,2,0.5,500,,0.1,1
+K27M_DMSO_K27me3,K27M_DMSO_K27me3,K27M_DMSO_IgG,3,2,100,,0.1,1

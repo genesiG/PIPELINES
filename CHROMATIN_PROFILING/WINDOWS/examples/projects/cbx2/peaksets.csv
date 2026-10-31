@@ -1,0 +1,11 @@
+peakset,target_group,control_group,small_filt,large_filt,merge_bp,max_width,fdr,lfc
+K27me3_DMSO_s3_l1_m500,DMSO_K27me3,DMSO_IgG,3,1,500,,0.05,1
+K27me3_1uM_s3_l1_m500,1uM_K27me3,1uM_IgG,3,1,500,,0.05,1
+K27me2_DMSO_s3_l1_m500,DMSO_K27me2,DMSO_IgG,3,1,500,,0.05,1
+K27me2_1uM_s3_l1_m500,1uM_K27me2,1uM_IgG,3,1,500,,0.05,1
+CBX2_DMSO_s3_l1_m500,DMSO_CBX2,DMSO_IgG,3,1,500,,0.05,1
+CBX2_1uM_s3_l1_m500,1uM_CBX2,1uM_IgG,3,1,500,,0.05,1
+H2AK119ub_DMSO_s3_l1_m500,DMSO_H2AK119ub,DMSO_IgG,3,1,500,,0.05,1
+H2AK119ub_1uM_s3_l1_m500,1uM_H2AK119ub,1uM_IgG,3,1,500,,0.05,1
+K27me2_DMSO_s2_l1_m50,DMSO_K27me2,DMSO_IgG,2,1,50,,0.05,1
+K27me3_DMSO_s3_l1.5_m50,DMSO_K27me3,DMSO_IgG,3,1.5,50,,0.05,1

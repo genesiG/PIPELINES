@@ -1,0 +1,2 @@
+track_set,locus_or_gene,flank,samples,labels,colors,max_value,beds,scalebar,bed_colors,bed_labels
+nucleation_tracks,"CBX2,CDKN2A,CDKN2A,CDKN2A,CDKN2A,CDKN2A","125000,100000,125000,200000,250000,400000","K27MKO_DMSO_K27me3_A,K27MKO_500nM_K27me3_A,K27M_DMSO_K27me3_A","K27MKO DMSO,K27MKO 500 nM,K27M DMSO","#8c6bb1,#88419d,#8c96c6","group:KO,group:KO,group:K27M","K27MKO_DMSO_K27me3,K27M_DMSO_K27me3",50000,"#8c6bb1,#8c96c6","K27MKO DMSO peaks,K27M DMSO peaks"

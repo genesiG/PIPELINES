@@ -1,0 +1,10 @@
+pattern,replacement
+1uM,\nEZH2i
+DMSO,\nDMSO
+LUC,sgControl
+CBX2.1,sgCBX2 #1
+CBX2.3,sgCBX2 #3
+A_," A"
+B_," B"
+DIPGVI_,""
+_," "

@@ -1,0 +1,7 @@
+name,case,control,group_column,block_column,case_peaks,control_peaks,pooled,fixed_dispersion
+BT54_high_vs_low,BT54_high,BT54_low,condition,,BT54_high,BT54_low,false,
+6349_high_vs_low,6349_high,6349_low,condition,,6349_high,6349_low,false,
+TS603_high_vs_low,TS603_high,TS603_low,condition,,TS603_high,TS603_low,false,
+HGGx42c_high_vs_low,HGGx42c_high,HGGx42c_low,condition,,HGGx42c_high,HGGx42c_low,false,
+K27MKO_high_vs_low,K27MKO_high,K27MKO_low,condition,,K27MKO_high,K27MKO_low,false,
+gd2_high_vs_low,"BT54_high,BT88_high,6349_high,HGGx42c_high,x42c_high,K27M_high,K27MKO_high,TS603_high","BT54_low,6349_low,HGGx42c_low,x42c_low,K27M_low,K27MKO_low,TS603_low",condition,tmm_group,"6349_high,BT54_high,HGGx42c_high,K27MKO_high,K27M_high,TS603_high,x42c_high","6349_low,BT54_low,HGGx42c_low,K27MKO_low,K27M_low,TS603_low,x42c_low",true,0.15

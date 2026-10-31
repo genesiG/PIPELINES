@@ -1,0 +1,4 @@
+sample_id,fastq_1,fastq_2,bam,exclude,condition
+sample_A1,/path/to/sample_A1_R1.fastq.gz,/path/to/sample_A1_R2.fastq.gz,,false,control
+sample_A2,/path/to/sample_A2_R1.fastq.gz,/path/to/sample_A2_R2.fastq.gz,,true,control
+sample_B1,,,/path/to/sample_B1.bam,false,treated

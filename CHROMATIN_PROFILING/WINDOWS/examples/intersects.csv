@@ -1,0 +1,2 @@
+name,bed_a,bed_b,label_a,label_b,min_overlap,reciprocal
+WT_K27me3_vs_other,WT_K27me3,/path/to/other.peaks.bed,WT_K27me3,other,0.5,false

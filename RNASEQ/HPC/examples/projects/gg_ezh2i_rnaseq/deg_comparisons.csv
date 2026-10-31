@@ -1,0 +1,7 @@
+model,design,comparison,factor,numerator,denominator,coef,add,subtract,label,combined_order,combined_title,xlim,ylim
+treatment,~treatment,LUC_1uM_vs_LUC_DMSO,treatment,LUC_1uM,LUC_DMSO,,,,EZH2i,2,EZH2i,,
+treatment,~treatment,CBX2_DMSO_vs_LUC_DMSO,treatment,CBX2_DMSO,LUC_DMSO,,,,CBX2 KO,1,CBX2 KO + DMSO,,
+treatment,~treatment,CBX2_1uM_vs_LUC_DMSO,treatment,CBX2_1uM,LUC_DMSO,,,,CBX2 KO + EZH2i,3,CBX2 KO + EZH2i,,
+treatment,~treatment,LUC_1uM_vs_CBX2_DMSO,treatment,LUC_1uM,CBX2_DMSO,,,,EZH2i vs CBX2 KO,,,,
+treatment,~treatment,CBX2_1uM_vs_CBX2_DMSO,treatment,CBX2_1uM,CBX2_DMSO,,,,CBX2 KO + EZH2i vs CBX2 KO,,,,
+treatment,~treatment,CBX2_1uM_vs_LUC_1uM,treatment,CBX2_1uM,LUC_1uM,,,,CBX2 KO + EZH2i vs EZH2i,,,,

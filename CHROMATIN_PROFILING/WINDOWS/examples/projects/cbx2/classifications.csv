@@ -1,0 +1,3 @@
+classification,regions,ref_group,treat_group,norm_run,lfc_retained,lfc_lost,fdr
+K27me3_1uM,K27me3_DMSO_s3_l1.5_m50,DMSO_K27me3,1uM_K27me3,,,,
+K27me2_1uM,K27me2_DMSO_s2_l1_m50,DMSO_K27me2,1uM_K27me2,,,,

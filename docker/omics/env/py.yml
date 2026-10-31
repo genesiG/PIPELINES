@@ -1,0 +1,23 @@
+name: py
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.12.13
+  - numpy=2.4.6
+  - pandas=2.3.3
+  - scipy
+  - matplotlib=3.10.0
+  - seaborn=0.13.2
+  - scikit-learn=1.9.0
+  - joblib=1.5.3
+  - biopython=1.81
+  - matplotlib-venn=1.1.2
+  - upsetplot=0.9.0
+  - python-docx=1.2.0
+  - pymol-open-source
+  - pybigwig=0.3.25
+  - statsmodels   # used by the CUT&RUN pipeline (retention scripts: lowess); already in the lock as a dependency
+  - pysam=0.24.1   # tn5_shift.sh (ATAC-seq pipeline) runs python3 = env py and imports pysam; version = lab image cutandrun-py_1.2
+  - pip

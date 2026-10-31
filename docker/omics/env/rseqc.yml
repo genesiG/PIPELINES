@@ -1,0 +1,10 @@
+name: rseqc
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  # RSeQC 5.0.6 (infer_experiment.py of the RNA-seq pipeline; HPC pin). It needs setuptools<82
+  # and pulls hatch, uv and r-base 4.6.2, so it has its own env instead of disturbing env ngs.
+  - python=3.12.13
+  - rseqc=5.0.6

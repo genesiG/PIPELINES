@@ -1,0 +1,10 @@
+norm_run,method,bin_size,cutoff,max_turns,ref_condition
+K27me2,spikein,,,,DMSO
+K27me3,spikein,,,,DMSO
+K4me3,spikein,,,,DMSO
+H2AK119ub,spikein,,,,DMSO
+CBX2,spikein,,,,DMSO
+EZH2,spikein,,,,DMSO
+GSTCBX2,spikein,,,,DMSO
+GSTControl,spikein,,,,DMSO
+GSTCBX7,spikein,,,,DMSO

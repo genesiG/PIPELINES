@@ -1,0 +1,3 @@
+classification,regions,ref_group,treat_group,norm_run,lfc_retained,lfc_lost,fdr
+EZH2i500_K27me3,DMSO_K27me3,DMSO_K27me3,EPZ_500nM_K27me3,,,,
+EZH2i500_K27me2,DMSO_K27me2,DMSO_K27me2,EPZ_500nM_K27me2,,,,

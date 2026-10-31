@@ -1,0 +1,138 @@
+# Example config for AM_ATACSEQ (legacy project /path/to/AM_ATACSEQ): 9 mouse ATAC-seq libraries, mm39, paired-end; peak groups WT, RAG2, Baseline.
+# Flat key: value, read by run_pipeline.sh (`^key:` lines; trailing # comments are stripped). A line starting with "# TOGGLE" is NOT read: to use it, replace the key line directly below it.
+#
+# ---- Defaults and legacy values (2026-10-26) ---------------------------------------------------
+# Every key is set to the AV_ATACSEQ_2026 value (= the nextflow.config default, same as the AV example).
+# Where AM_ATACSEQ (Scripts/config.py and step scripts, compared file by file) differs, the AM value is a TOGGLE line above the key.
+#
+# Differences AM legacy vs AV_ATACSEQ_2026 (diff -u of the shared scripts, 2026-10-26):
+#  1. MACS3 --fe-cutoff: config.py MACS_FE_CUTOFF 1.0 (AM) vs 2.0 (AV). Here 2.0.
+#  2. MACS3 --call-summits: MACS_CALL_SUMMITS True (AM) vs False (AV). Here false.
+#  3. MACS3 --min-length / --max-gap: not set in AM (step_4c_macs2.py omits them) vs 250 / 500 (AV). Here 250 / 500.
+#  4. Contaminant index: CONTAMINANTS_IDX is set in AV config.py only. Here null (see contamination_index).
+#  5. bigWig: step_5 names the file {sample}.tmm.bin_size_10.bw (AM) vs {sample}.tmm.bw (AV); AM uses bamCoverage -p max.
+#     Bin size 10, --skipNonCoveredRegions, --centerReads, no --extendReads and scale 1/SF are identical. Naming only; no toggle.
+#     Both legacy projects: no --extendReads (per-mate read coverage). Here bigwig_extend_reads true (fragment coverage, as CUT&RUN).
+#  6. TMM: step_4b_tmm_normalization.py hard-codes TARGETS "WT|RAG2|Baseline" (AM) vs config TARGETS (AV); same single group here.
+#     scaleFactors.R: only package-loading and message lines differ (one hunk). SF formula (normfacs * libSizes / 1e6), bin 10000 and EFFICIENCY_BIAS FALSE are identical.
+#  7. getPEsizes.R: only package-loading and message lines differ. The max-frag bug (line 78, keeps the first sample's maximum) is identical in both.
+#  8. MACS3 group match (step_4c): substring `group in sample_id` (AM) vs re.search (AV). Same result for WT, RAG2 and Baseline; here peak_group is an exact column.
+#  9. Trimming (step_1), bowtie2 (step_2), BAM processing (step_3, incl. the -q mapq literal, duplicate removal and blacklist), step_3d, step_4a and step_4qc: identical. No parameter difference.
+# 10. Dataset or location only, no toggle: genome, FASTQ naming (FORWARD/REVERSE_PATTERN '_R1','_7_1_' vs '_R1'), directory layout, SCALINGDIR (Importable_Data vs Analysis_Data).
+# 11. merge_peaks.sh: AM = CBX2 nucleation/spreading subtraction (CBX2_Fig1 paths), not a merge of this dataset's peaks; AV = bedops merge of high/low peaks. So peak_merges is null here.
+# 12. Blacklist (step_3): AM uses `bedtools intersect -v` on a BED round trip (bedtobam). The pipeline removes pairs with pairtobed (fix, no toggle).
+#
+# ---- Toggles that reproduce legacy or enable a fix ---------------------------------------------
+# TOGGLE mapq: 0                             legacy literal `-q mapq` -> samtools atoi -> MAPQ 0 (step_3_process_bam.py:140; identical in AM)
+# TOGGLE remove_chroms: ''                   legacy: chrM kept
+# TOGGLE tmm_group_column: tmm_group_legacy  legacy group membership (filename substring); one group here, so no change
+# TOGGLE bowtie2_minins: null                legacy: no -I (the pipeline passes -I 10)
+# TOGGLE bowtie2_args: '-N 1 -t'             legacy -N 1 and -t (the default is '': CUT&RUN parameters + -X 2000)
+# TOGGLE tn5_shift: true                     not legacy: deepTools alignmentSieve --ATACshift before QC/TMM/bigWig/MACS3
+# TOGGLE macs3_fe_cutoff: 1.0                AM legacy (MACS_FE_CUTOFF 1.0; <=1 = off, fe absent from the peak file prefix)
+# TOGGLE macs3_call_summits: true            AM legacy (MACS_CALL_SUMMITS True; also writes {prefix}_summits.bed)
+# TOGGLE macs3_min_length: null              AM legacy (MACS_MIN_LENGTH not set)
+# TOGGLE macs3_max_gap: null                 AM legacy (MACS_MAX_GAP not set)
+
+project_name: AM_ATACSEQ
+samplesheet: samplesheet.csv   # sample_id,fastq_1,fastq_2,condition,replicate,tmm_group,tmm_group_legacy,peak_group,exclude
+peak_merges: null              # none: AM merge_peaks.sh is not a peak merge (see difference 11)
+fastq_dir: null                # samplesheet carries absolute FASTQ paths (supported way for these examples)
+outdir: ./results
+metadata_dir: ./metadata
+intermediate_dir: ./intermediate_files
+publish_mode: copy
+
+# ---- References (mm39) -------------------------------------------------------------------------
+genome_index: /project/rephilllab/references/bowtie2/mm39/mm39                          # bowtie2 index PREFIX (mm39)
+chrom_sizes: /project/rephilllab/references/chr_size/mm39.chrom.sizes
+blacklist: /project/rephilllab/references/blacklist/mm10-blacklist.v2.Liftover.mm39.bed # mm10 blacklist lifted to mm39 (same file as AM config.py)
+gtf: /project/rephilllab/references/genomes/mm39/mm39.ncbiRefSeq.curated.norandom.gtf
+tss_bed: /project/rephilllab/references/genomes/mm39/mm39.curated.norandom.tss.bed
+effective_genome_size: 2700000000   # MACS3 -g (AM config.py GENOME_SIZE_FOR_MACS 2.7e9 for mm39)
+# contamination_index left null: the contaminant index (/project/rephilllab/references/bowtie2/contaminants/contaminants) contains mm10
+# (239 mm10 contigs in its source FASTA), so mouse reads would align to it and be counted as contaminants. AM config.py did not set it either.
+contamination_index: null
+
+# ---- Step switches -----------------------------------------------------------------------------
+run_fastqc: true
+trim: true
+run_tss_enrichment: true
+run_macs3: true
+run_multiqc: true
+tn5_shift: false
+remove_duplicates: true   # sambamba markdup -r (AM config.py REMOVE_DUPLICATES True)
+help: false
+
+# ---- Trimming (identical in AM and AV) --------------------------------------------------------
+trim_adapter_set: NexteraPE-PE
+trim_illuminaclip: '2:30:10:8:True'
+trim_steps: 'LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20'
+trim_minlen: 25
+
+# ---- Alignment (legacy: identical in AM and AV; the pipeline uses the CUT&RUN parameters + -X 2000, see README) ----
+bowtie2_mode: local
+# TOGGLE bowtie2_minins: null   (legacy: no -I)
+bowtie2_minins: 10
+bowtie2_maxins: 2000
+# TOGGLE bowtie2_args: '-N 1 -t'   (legacy -N 1 and -t)
+bowtie2_args: ''
+align_chunk_pairs: 10000000   # read pairs per ALIGN task; 0 = no chunking (one ALIGN task per library)
+alignment_min_pct: 20
+
+# ---- Filtering --------------------------------------------------------------------------------
+mapq: 30                  # AM config.py MAPQ 30 (the legacy filter was never applied; see TOGGLE mapq: 0)
+remove_chroms: chrM       # chrM removal (new; legacy kept chrM; see TOGGLE remove_chroms)
+
+# ---- QC ---------------------------------------------------------------------------------------
+tss_flank: 2000
+
+# ---- TMM normalisation ------------------------------------------------------------------------
+tmm_bin_size: 10000       # AM step_4b BIN_WIDTH 10000
+tmm_max_frag: auto
+tmm_group_column: tmm_group
+
+# ---- bigWig tracks ----------------------------------------------------------------------------
+# AM step_5: bamCoverage --binSize 10, --skipNonCoveredRegions, --centerReads, scaleFactor 1/SF (= 1e6/(nf*lib)); same as here with bigwig_units none
+bigwig_bin_size: 10       # AM config.py BIN_SIZE 10
+bigwig_units: none
+bigwig_extend_reads: true    # fragment coverage (as CUT&RUN); legacy false: no --extendReads = per-mate read coverage
+bigwig_center_reads: false   # legacy true, a no-op without --extendReads; true + extend true = read-length windows at fragment midpoints
+bigwig_args: ''
+
+# ---- Peaks: MACS3 (one call per peak_group, replicates pooled, no control) -------------------
+macs3_qvalue: 0.05        # AM config.py MACS_Q_VALUE 0.05
+# TOGGLE macs3_min_length: null   (AM legacy: not set; see the header)
+macs3_min_length: 250
+# TOGGLE macs3_max_gap: null      (AM legacy: not set; see the header)
+macs3_max_gap: 500
+# TOGGLE macs3_fe_cutoff: 1.0     (AM legacy MACS_FE_CUTOFF 1.0 = off)
+macs3_fe_cutoff: 2.0
+# TOGGLE macs3_call_summits: true (AM legacy MACS_CALL_SUMMITS True)
+macs3_call_summits: false
+macs3_broad: false
+macs3_broad_cutoff: 0.1
+macs3_args: ''
+
+# ---- Downstream analyses (AM_ATACSEQ values; not validated: run_* are off) ----------------------------------------
+# The AM legacy comparisons (differential_accessibility.Rmd: conditions WT, RAG2 against the controls RAG2, Baseline; the
+# loop skips condition == control) are in comparisons.csv. Switch the steps on (run_differential, run_annotation, run_motifs)
+# only after a validation run. Peak groups of the samplesheet (WT, RAG2, Baseline) are the default peak sets.
+run_differential: false
+run_annotation: false
+run_motifs: false
+comparisons: comparisons.csv
+species: 'Mus musculus'               # AM legacy (mm39)
+genome_build: 'mm39'                  # AM legacy
+diff_pe: 'none'                       # AM legacy (csaw_parameters.R pe = "none")
+diff_lfc: 1                           # AM legacy lfc = 1
+diff_table: 'combined'                # AM legacy (merged$combined)
+annotation_fdr: 0.1                   # AM legacy: annotate FDR < 0.1
+motif_lfc: 1                          # AM legacy lfc_thres = 1
+motif_regions: 'promoter_sites,non-promoter_sites,all_sites'   # AM legacy: annotation subsets instead of the promoter table
+# TOGGLE diff_pe: 'both'              # AV26 values (the other downstream keys are the nextflow.config defaults, AV26 values)
+# TOGGLE diff_lfc: 0.585
+# TOGGLE diff_table: 'best'
+# TOGGLE annotation_fdr: null
+# TOGGLE motif_lfc: 0.585
+# TOGGLE motif_regions: 'promoters'

@@ -1,0 +1,114 @@
+# Generic config template for this pipeline (paired-end RNA-seq, HISAT2 + featureCounts). Copied to ./config.yaml by `run_rnaseq.sh init`.
+# Flat key: value file on purpose: run_pipeline.sh reads single keys with grep/sed. Keep every key on one line, no nesting.
+# Every line marked `# set me` must be filled in. Every other key already has a working default (the value shown).
+#
+# Defaults are the lab's legacy GG_EZH2i_RNAseq settings (Scripts/config.py, step_0d to step_5) unless a comment says otherwise.
+# Legacy toggles that reproduce the old behaviour are listed next to the key they change.
+#
+# Input and output locations
+project_name: my_rnaseq        # set me: prefix of the counts table (<project_name>_counts.txt)
+samplesheet: samplesheet.csv   # the library table (see README "samplesheet.csv")
+fastq_dir: null                # null = samplesheet paths are used as given. A directory here is moved into original_data/fastq/ on the first run
+outdir: ./results
+metadata_dir: ./metadata
+intermediate_dir: ./intermediate_files
+publish_mode: copy
+lsf_exclude_hosts: ''          # LSF hosts to avoid for compute jobs, comma separated; empty = none
+
+# References (required)
+hisat2_index: null             # set me: HISAT2 index PREFIX (no .ht2 suffix), e.g. /project/rephilllab/references/hisat2/t2t/chm13-2 for files chm13-2.1.ht2 ... The run stops at startup if no <prefix>.1.ht2 (or .1.ht2l) exists.
+gtf: null                      # set me: annotation GTF used by featureCounts and by the strandedness check (gene model)
+# mm39 (mouse) block. Copy a line over the matching key above to use mm39. Checked with ls on 2026-10-29: the HISAT2 index files
+# /project/rephilllab/references/hisat2/mm39/mm39.1.ht2 ... mm39.8.ht2 and the GTF /project/rephilllab/references/genomes/mm39/mm39.ncbiRefSeq.curated.norandom.gtf exist.
+# hisat2_index: /project/rephilllab/references/hisat2/mm39/mm39
+# gtf: /project/rephilllab/references/genomes/mm39/mm39.ncbiRefSeq.curated.norandom.gtf
+# For mm39 keep remove_chroms empty (below): that GTF has chrM genes, and removing chrM would zero their counts.
+
+# Strandedness (library prep). The counting uses this key; the automatic check (RSeQC infer_experiment) only reports and never changes counts.
+strandedness: unstranded       # unstranded | forward | reverse. unstranded = legacy GG (featureCounts -s 0). forward -> -s 1, reverse -> -s 2
+strand_call_threshold: 0.8     # the check calls forward/reverse when the fraction explained by that strand is >= this (range (0.5, 1])
+infer_experiment_reads: 200000 # reads sampled per BAM by infer_experiment.py (-s)
+
+# Switches
+run_fastqc: true               # FastQC on raw and on trimmed reads (both mates). Legacy GG: trimmed R1 only
+trim: true                     # Trimmomatic paired-end trimming. false = reads pass through unchanged
+run_multiqc: true
+mark_duplicates: true          # Picard MarkDuplicates on the filtered BAM; the marked BAM is the one counted. false = the filtered BAM is final
+remove_duplicates: false       # true = Picard removes duplicates instead of marking them (needs mark_duplicates: true). Legacy GG: false (mark only)
+help: false                    # true prints the parameter help and stops
+
+# Trimming (Trimmomatic 0.40)
+trim_adapter_set: 'TruSeq3-PE-2'    # adapter file name (without .fa) found in the Trimmomatic container
+trim_illuminaclip: '2:30:10:8:True' # ILLUMINACLIP seed mismatches:palindrome clip threshold:simple clip threshold:min adapter length:keep both reads
+trim_steps: ''                      # extra Trimmomatic steps after ILLUMINACLIP, e.g. 'LEADING:3 TRAILING:3'. Legacy GG: none
+trim_minlen: 25                     # MINLEN
+
+# Alignment (HISAT2 2.2.1)
+hisat2_args: ''                # extra HISAT2 arguments, appended after the pipeline's own. Legacy GG: none. --rna-strandness is not set by the strandedness key
+alignment_min_pct: 50          # warning threshold for the overall alignment rate (warns only, never fails)
+
+# Filtering (samtools 1.23)
+mapq: 30                       # MAPQ filter, samtools -q. 0 = no MAPQ filter. Legacy GG: 30 (older projects AM_RNASEQ_2026, AM_AV_RNASEQ, AV_RNASEQ wrote the literal word `mapq`, which means no filter)
+remove_chroms: ''              # comma list of contigs to drop before counting. Empty = keep all (default). Legacy GG removed chrM (no effect on the T2T counts; zeroes chrM genes on mm39)
+
+# Duplicates (Picard 2.27.5)
+optical_duplicate_pixel_distance: 2500   # OPTICAL_DUPLICATE_PIXEL_DISTANCE (legacy GG: 2500)
+
+# Counting (featureCounts 2.1.1)
+featurecounts_feature_type: exon         # -t, the GTF feature type counted (legacy GG: exon)
+featurecounts_attribute: gene_id         # -g, the GTF attribute the counts are summed by (legacy GG: gene_id)
+featurecounts_args: ''                   # extra featureCounts arguments, appended after the pipeline's own. Legacy GG: none
+
+# Differential expression (DESeq2). OFF by default: run_deg false = the pipeline ends at the counts table.
+# Uncomment run_deg and deg_comparisons to switch it on; everything else has the default shown (the defaults reproduce the legacy
+# step_6_deg_analysis.Rmd of GG_EZH2i_RNAseq except where a comment says otherwise). Quote hex colours: '#' starts a YAML comment.
+# The CSV formats (comparisons, heatmaps, colours, label rules) are in README.md, "Differential expression".
+# run_deg: false
+# deg_comparisons: deg_comparisons.csv   # set me when run_deg is true: model, design, comparison + contrast columns
+# deg_counts: null                       # an existing counts table (Gene + one column per sample). With run_deg it skips ALL upstream steps (no reads, QC, MultiQC)
+# deg_metadata: null                     # sample metadata CSV/TSV. null = samplesheet.csv (excluded rows dropped). Needs the deg_sample_col column
+# deg_heatmaps: null                     # CSV, one row per heatmap (null = no heatmaps)
+# deg_colors: null                       # CSV group,color for the QC and gene plots (null = default palette)
+# deg_label_rules: null                  # CSV pattern,replacement: regex rules that rewrite the sample labels of the heatmaps
+# deg_sample_col: sample_id              # metadata column holding the sample names (must equal the count table columns)
+# deg_strip_suffix: ''                   # regex removed from the count column names, e.g. '\.R1$' for the legacy counts matrix
+# deg_reference_levels: ''               # factor=level,factor=level, e.g. treatment=LUC_DMSO,drug=DMSO,target=LUC ('' = alphabetical)
+# deg_min_count: 10                      # keep genes with >= deg_min_count reads in >= deg_min_samples samples
+# deg_min_samples: 2
+# deg_fit_type: parametric               # parametric | local | mean
+# deg_alpha: 0.05                        # FDR cut-off, in (0, 1)
+# deg_lfc: 1                             # |log2 fold change| cut-off, >= 0
+# deg_lfc_threshold_in_results: false    # true = lfcThreshold = deg_lfc inside results()
+# deg_shrink_type: ashr                  # ashr | apeglm (coef contrasts only) | none
+# deg_sval_threshold: 0.005              # s-value cut-off of the shrunk volcano
+# deg_transform_method: rlog             # rlog | vst (heatmaps, gene plots)
+# deg_transform_blind: false
+# deg_color_down: '#46627A'              # volcano / MA / heatmap colours (legacy volcano: up '#810f7c', gray; legacy heatmap: '#4d004b' - white - goldenrod)
+# deg_color_up: '#8c6bb1'
+# deg_color_ns: gray
+# deg_color_mid: white                   # heatmap midpoint
+# deg_color_by: ''                       # metadata column that colours the QC plots ('' = first design variable)
+# deg_mds_input: logcpm                  # logcpm | counts (raw counts as legacy, dominated by library size)
+# deg_mds_label_by: ''
+# deg_mds_legend_title: ''               # '' = the colour-by column
+# deg_legacy_mds_legend_col: ''          # a metadata column name reproduces the legacy (mismatched) MDS legend
+# deg_cor_method: spearman               # pearson | spearman | kendall
+# deg_label_genes: ''                    # comma list of genes named in the volcano plots
+# deg_volcano_xlim: ''                   # "min,max" ('' = automatic); a comparison's own xlim / ylim columns win
+# deg_volcano_ylim: ''
+# deg_volcano_common_xlim: ''            # limits of the combined volcano figure and the x / y scaled PDFs
+# deg_volcano_common_ylim: ''
+# deg_volcano_combined_layout: stacked   # stacked | side
+# deg_gene_plot_genes: ''                # comma list: one expression plot per gene ('' = none)
+# deg_gene_plot_x: ''                    # x axis / colour column of the gene plots ('' = deg_color_by, else the first design variable)
+# deg_legacy_summary_counts: false       # true reproduces the legacy analysis_summary (0 up / 0 down)
+# deg_run_qc: true
+# deg_run_barplot: true
+# deg_run_mds: true
+# deg_run_correlation: true
+# deg_run_volcano: true
+# deg_run_volcano_pdfs: true
+# deg_run_volcano_combined: true
+# deg_run_heatmap: true                  # also needs deg_heatmaps
+# deg_run_ma: false
+# deg_run_gene_plots: true               # runs only when deg_gene_plot_genes is set

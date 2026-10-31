@@ -1,0 +1,3 @@
+norm_run,method,bin_size,cutoff,max_turns,min_first_turn,ref_condition
+K27me3_run,chipseqspikeinfree,10000,0.86,6,,
+K27me3_spikein,spikein,,,,,

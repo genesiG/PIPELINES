@@ -1,0 +1,4 @@
+name,case,control,group_column,block_column,case_peaks,control_peaks,pooled,fixed_dispersion
+WT_vs_RAG2,WT,RAG2,condition,,,,false,
+WT_vs_Baseline,WT,Baseline,condition,,,,false,
+RAG2_vs_Baseline,RAG2,Baseline,condition,,,,false,

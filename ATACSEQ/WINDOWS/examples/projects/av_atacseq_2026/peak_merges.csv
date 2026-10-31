@@ -1,0 +1,3 @@
+name,peak_groups
+high_gd2_peaks,"BT54_high,BT88_high,6349_high,HGGx42c_high,x42c_high,K27M_high,K27MKO_high,TS603_high"
+low_gd2_peaks,"BT54_low,6349_low,HGGx42c_low,x42c_low,K27M_low,K27MKO_low,TS603_low"

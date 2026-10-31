@@ -1,0 +1,95 @@
+# Generic config template for this pipeline (paired-end ATAC-seq). Copy it to config.yaml in your project folder and edit the copy; do NOT edit examples/config.yaml itself for a real run.
+# Copy of examples/projects/av_atacseq_2026/config.yaml (in the WINDOWS folder) with the project paths removed. Every line marked `# set me` must be filled in.
+# Reference paths are taken from AV_ATACSEQ_2026/Scripts/config.py (SPECIES = t2t), except the TSS path (see below).
+#
+# ---- Latest legacy parameters (AV_ATACSEQ_2026 Scripts/config.py and step scripts) ----------------------------
+# Trimming (step_1_trimmomatic.py): Trimmomatic 0.32 jar (pipeline: biocontainer 0.40), PE; ILLUMINACLIP:NexteraPE-PE.fa:2:30:10:8:True
+#   LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:25.
+# Alignment: bowtie2 --local --very-sensitive-local -q --no-mixed --no-discordant --dovetail -I 10 -X 2000. Here: CUT&RUN parameters + -X 2000; -N 1 dropped (user, 2026-10-28); legacy toggles below.
+# BAM filter (step_3_process_bam.py): samtools view -f 1 -f 2 -F 4 -F 8 -F 256 -F 512 -F 1024 -F 2048 with the LITERAL -q mapq (= 0);
+#   no chrM removal. Duplicates: sambamba markdup -r (REMOVE_DUPLICATES True).
+# Blacklist (step_3_process_bam.py): BAM -> BEDPE -> bedtools intersect -v -> BEDPE -> BAM (replaced by a pair-aware filter here).
+# TMM (step_4b_tmm_normalization.py, scaleFactors.R): bin 10000 bp, EFFICIENCY_BIAS FALSE, groups by file-name substring
+#   (TARGETS BT54,BT88,TS603,TS667,11284,11656,6349,x42c,x6c,K27M); max.frag from getPEsizes.R (legacy value 1999, see README).
+# bigWig (step_5_generate_bigwig.py): bamCoverage --binSize 10 --skipNonCoveredRegions --centerReads; TMM tracks with no
+#   --normalizeUsing (None) and --scaleFactor 1/SF, SF = normalisation factor * library size / 1e6; no --extendReads.
+# MACS3 (step_4c_macs2.py): callpeak -f BAMPE --keep-dup all -q 0.05 --min-length 250 --max-gap 500 --fe-cutoff 2.0
+#   -g 3100000000.0 (narrow, no summits), replicates pooled, no control.
+# Peak merge (merge_peaks.sh): bedops --merge of the *high / *low narrowPeak files with fe4.0 (see peak_merges.csv).
+# TSS (config.py:75): legacy path .../mylibrary/genomes/t2t.curated.norandom.tss.bed lacks t2t/ and does not exist; corrected below.
+#
+# The value on each line is the setting this example uses: the latest legacy value, or the pipeline default where the
+# pipeline deliberately differs from legacy (MAPQ, chrM, TMM groups, Tn5). A comment after a key gives the legacy value and
+# the toggle that reproduces it.
+project_name: my_atacseq      # set me (prefix of the QC report and other project-level outputs)
+samplesheet: samplesheet.csv
+peak_merges: peak_merges.csv   # legacy merge_peaks.sh (high and low sets); null = no merged BED
+# Not used by this version: the FASTQs are named in samplesheet.csv (fastq_1 / fastq_2) and are never moved
+# or copied; the launcher mounts them read-only where they are. Leave null.
+fastq_dir: null
+outdir: ./results
+metadata_dir: ./metadata
+intermediate_dir: ./intermediate_files
+publish_intermediates: false   # true = also publish the trimmed FASTQs, aligned BAMs and filtered BAMs to intermediate_dir; false = keep them only in the work folder (kept while keep_work: true)
+publish_mode: auto             # auto = hard links from the work folder when possible, else copies (with work_volume: true: copies) | copy | link | symlink | rellink (symlink/rellink/link need work_volume: false; symlink/rellink make results/ point into the work folder and force keep_work on)
+
+# ---- This computer (Docker versions only; read by run_atacseq) ---------------------
+# max_cpus: 8                  # CPU cores one analysis may use; default (line absent) = all cores but 1-2, never more than Docker allows
+# max_memory_gb: 32            # memory (GB) one analysis may use; default = at most 75% of the computer's memory, leaving 3 GB to the system, never more than Docker allows
+keep_work: true                # true = keep the work folder and resume cache after a successful run so the next run resumes; false = delete them after a successful run, the Docker volume too with work_volume: true (the next run then recomputes every step)
+work_volume: true              # true = Nextflow's work folder and resume cache in a Docker volume on Docker's disk (fast; publish_mode auto then means copy); false = metadata/work and metadata/.nextflow in the project folder (switching loses resume)
+
+# ---- References (placeholders: replace every ~/references/... path with your own file) ----
+genome_index: ~/references/bowtie2/genome_index_prefix   # PLACEHOLDER: bowtie2 index PREFIX of the genome (required). Legacy GNM_IDX: .../mylibrary/bowtie2/t2t/chm13v2.0 (CHM13v2.0)
+chrom_sizes: ~/references/chr_size/genome.chrom.sizes   # PLACEHOLDER (recorded and validated only if set). Legacy GNM_SIZES: .../mylibrary/chr_size/t2t.chrom.sizes
+blacklist: ~/references/blacklist/blacklist.bed   # PLACEHOLDER (null or empty = skip BLACKLIST_FILTER). Legacy BLACKLIST: .../mylibrary/blacklist/t2t.blacklist.bed; pair-aware removal here (no BED round trip)
+gtf: ~/references/genomes/genes.gtf   # PLACEHOLDER (recorded and validated only if set). Legacy GNM_GTF: .../mylibrary/genomes/t2t/t2t.ncbiRefSeq.curated.norandom.gtf
+tss_bed: ~/references/genomes/tss.bed   # PLACEHOLDER (required when run_tss_enrichment is on and some sample has a tmm_group). Legacy config.py:75 path missing t2t/ (does not exist); corrected
+effective_genome_size: null   # set me (MACS3 -g; required when run_macs3 is on and some sample has a peak_group). Legacy GENOME_SIZE_FOR_MACS 3.1e9 (t2t)
+contamination_index: ~/references/bowtie2/contaminants/contaminants   # PLACEHOLDER: bowtie2 index PREFIX of the contaminant genomes, or null (null = skip CONTAMINATION). Legacy CONTAMINANTS_IDX (merged contaminant genomes)
+
+run_fastqc: true
+trim: true                # legacy: Trimmomatic PE
+run_tss_enrichment: true
+run_macs3: true
+run_multiqc: true
+tn5_shift: false          # true = deepTools alignmentSieve --ATACshift before QC/TMM/bigWig/MACS3 (not in legacy)
+remove_duplicates: true   # legacy REMOVE_DUPLICATES True (sambamba markdup -r)
+help: false
+
+trim_adapter_set: 'NexteraPE-PE'
+trim_illuminaclip: '2:30:10:8:True'
+trim_steps: 'LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20'
+trim_minlen: 25           # legacy MINLEN:25
+
+bowtie2_mode: local
+bowtie2_minins: 10        # bowtie2 -I. Legacy: null (no -I)
+bowtie2_maxins: 2000      # legacy -X 2000
+bowtie2_args: ''          # extra bowtie2 arguments. Legacy: '-N 1 -t' (the other legacy flags are fixed in the pipeline)
+align_chunk_pairs: 10000000   # read pairs per ALIGN task; 0 = no chunking (one ALIGN task per library)
+alignment_min_pct: 20     # warning threshold only (never fails)
+
+mapq: 30                  # 0 reproduces legacy literal `-q mapq` (samtools reads it as 0)
+remove_chroms: chrM       # '' (empty) = legacy: keep chrM
+
+tss_flank: 2000           # legacy computeMatrix flank +-2 kb
+
+tmm_bin_size: 10000       # legacy BIN_WIDTH
+tmm_max_frag: auto        # legacy max.frag (getPEsizes.R; legacy value 1999 = first sample only, see README); auto = true maximum here
+tmm_group_column: tmm_group   # tmm_group_legacy = legacy substring membership (K27M+K27MKO, x42c+HGGx42c)
+
+bigwig_bin_size: 10       # legacy BIN_SIZE
+bigwig_units: none        # legacy: no --normalizeUsing (None); --scaleFactor 1/SF
+bigwig_extend_reads: true    # fragment coverage (as CUT&RUN); legacy false: no --extendReads = per-mate read coverage
+bigwig_center_reads: false   # legacy true, but --centerReads was a no-op without --extendReads; true + extend true =
+                             #   read-length windows at fragment midpoints (neither legacy nor fragment coverage)
+bigwig_args: ''
+
+macs3_qvalue: 0.05        # legacy MACS_Q_VALUE
+macs3_min_length: 250     # legacy MACS_MIN_LENGTH
+macs3_max_gap: 500        # legacy MACS_MAX_GAP
+macs3_fe_cutoff: 2.0      # legacy config.py 2.0 (fe2.0 narrowPeak files); legacy merge_peaks.sh used the fe4.0 files, which also exist in peaks/ (4.0 = alternative)
+macs3_call_summits: false
+macs3_broad: false
+macs3_broad_cutoff: 0.1
+macs3_args: ''

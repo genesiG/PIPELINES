@@ -1,0 +1,3 @@
+name,bed_a,bed_b,label_a,label_b,min_overlap,reciprocal,output
+lost_h3k27me3_in_retained_h3k27me2,K27me3_1uM.lost,K27me2_1uM.retained,Lost H3K27me3,Retained H3K27me2,0.05,true,overlap
+lost_h3k27me2_in_lost_h3k27me3,K27me2_1uM.lost,K27me3_1uM.lost,Lost H3K27me2,Lost H3K27me3,0.05,true,overlap

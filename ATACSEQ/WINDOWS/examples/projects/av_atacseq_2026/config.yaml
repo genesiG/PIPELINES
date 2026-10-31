@@ -1,0 +1,146 @@
+# Example config for AV_ATACSEQ_2026 (legacy project AV_ATACSEQ_2026); flat key: value, read by run_atacseq.
+# PLACEHOLDERS: every D:/references/... path below is a placeholder; replace it with your own file.
+# Reference paths are taken from AV_ATACSEQ_2026/Scripts/config.py (SPECIES = t2t), except the TSS path (see below).
+#
+# ---- Latest legacy parameters (AV_ATACSEQ_2026 Scripts/config.py and step scripts) ----------------------------
+# Trimming (step_1_trimmomatic.py): Trimmomatic 0.32 jar (pipeline: biocontainer 0.40), PE; ILLUMINACLIP:NexteraPE-PE.fa:2:30:10:8:True
+#   LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:25.
+# Alignment: bowtie2 --local --very-sensitive-local -q --no-mixed --no-discordant --dovetail -I 10 -X 2000. Here: CUT&RUN parameters + -X 2000; -N 1 dropped (user, 2026-10-28); legacy toggles below.
+# BAM filter (step_3_process_bam.py): samtools view -f 1 -f 2 -F 4 -F 8 -F 256 -F 512 -F 1024 -F 2048 with the LITERAL -q mapq (= 0);
+#   no chrM removal. Duplicates: sambamba markdup -r (REMOVE_DUPLICATES True).
+# Blacklist (step_3_process_bam.py): BAM -> BEDPE -> bedtools intersect -v -> BEDPE -> BAM (replaced by a pair-aware filter here).
+# TMM (step_4b_tmm_normalization.py, scaleFactors.R): bin 10000 bp, EFFICIENCY_BIAS FALSE, groups by file-name substring
+#   (TARGETS BT54,BT88,TS603,TS667,11284,11656,6349,x42c,x6c,K27M); max.frag from getPEsizes.R (legacy value 1999, see README).
+# bigWig (step_5_generate_bigwig.py): bamCoverage --binSize 10 --skipNonCoveredRegions --centerReads; TMM tracks with no
+#   --normalizeUsing (None) and --scaleFactor 1/SF, SF = normalisation factor * library size / 1e6; no --extendReads.
+# MACS3 (step_4c_macs2.py): callpeak -f BAMPE --keep-dup all -q 0.05 --min-length 250 --max-gap 500 --fe-cutoff 2.0
+#   -g 3100000000.0 (narrow, no summits), replicates pooled, no control.
+# Peak merge (merge_peaks.sh): bedops --merge of the *high / *low narrowPeak files with fe4.0 (see peak_merges.csv).
+# TSS (config.py:75): legacy path .../mylibrary/genomes/t2t.curated.norandom.tss.bed lacks t2t/ and does not exist; corrected below.
+#
+# The value on each line is the setting this example uses: the latest legacy value, or the pipeline default where the
+# pipeline deliberately differs from legacy (MAPQ, chrM, TMM groups, Tn5). A comment after a key gives the legacy value and
+# the toggle that reproduces it.
+project_name: AV_ATACSEQ_2026
+samplesheet: samplesheet.csv
+peak_merges: peak_merges.csv   # legacy merge_peaks.sh (high and low sets); null = no merged BED
+fastq_dir: null           # samplesheet carries absolute FASTQ paths
+outdir: ./results
+metadata_dir: ./metadata
+intermediate_dir: ./intermediate_files
+publish_mode: copy
+
+genome_index: D:/references/t2t/bowtie2/chm13v2.0   # PLACEHOLDER: bowtie2 index PREFIX (CHM13v2.0), legacy GNM_IDX
+chrom_sizes: D:/references/t2t/t2t.chrom.sizes   # PLACEHOLDER (recorded and validated only), legacy GNM_SIZES
+blacklist: D:/references/t2t/t2t.blacklist.bed   # PLACEHOLDER; legacy BLACKLIST, pair-aware removal here (no BED round trip)
+gtf: D:/references/t2t/t2t.ncbiRefSeq.curated.norandom.gtf   # PLACEHOLDER (recorded and validated only), legacy GNM_GTF
+tss_bed: D:/references/t2t/t2t.curated.norandom.tss.bed   # PLACEHOLDER; legacy config.py:75 path missing t2t/ (does not exist); corrected
+effective_genome_size: 3100000000   # legacy GENOME_SIZE_FOR_MACS 3.1e9
+contamination_index: D:/references/bowtie2/contaminants/contaminants   # PLACEHOLDER: legacy CONTAMINANTS_IDX (merged contaminant genomes)
+
+run_fastqc: true
+trim: true                # legacy: Trimmomatic PE
+run_tss_enrichment: true
+run_macs3: true
+run_multiqc: true
+tn5_shift: false          # true = deepTools alignmentSieve --ATACshift before QC/TMM/bigWig/MACS3 (not in legacy)
+remove_duplicates: true   # legacy REMOVE_DUPLICATES True (sambamba markdup -r)
+help: false
+
+trim_adapter_set: 'NexteraPE-PE'
+trim_illuminaclip: '2:30:10:8:True'
+trim_steps: 'LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20'
+trim_minlen: 25           # legacy MINLEN:25
+
+bowtie2_mode: local
+bowtie2_minins: 10        # bowtie2 -I. Legacy: null (no -I)
+bowtie2_maxins: 2000      # legacy -X 2000
+bowtie2_args: ''          # extra bowtie2 arguments. Legacy: '-N 1 -t' (the other legacy flags are fixed in the pipeline)
+align_chunk_pairs: 10000000   # read pairs per ALIGN task; 0 = no chunking (one ALIGN task per library)
+alignment_min_pct: 20     # warning threshold only (never fails)
+
+mapq: 30                  # 0 reproduces legacy literal `-q mapq` (samtools reads it as 0)
+remove_chroms: chrM       # '' (empty) = legacy: keep chrM
+
+tss_flank: 2000           # legacy computeMatrix flank +-2 kb
+
+tmm_bin_size: 10000       # legacy BIN_WIDTH
+tmm_max_frag: auto        # legacy max.frag (getPEsizes.R; legacy value 1999 = first sample only, see README); auto = true maximum here
+tmm_group_column: tmm_group   # tmm_group_legacy = legacy substring membership (K27M+K27MKO, x42c+HGGx42c)
+
+bigwig_bin_size: 10       # legacy BIN_SIZE
+bigwig_units: none        # legacy: no --normalizeUsing (None); --scaleFactor 1/SF
+bigwig_extend_reads: true    # fragment coverage (as CUT&RUN); legacy false: no --extendReads = per-mate read coverage
+bigwig_center_reads: false   # legacy true, but --centerReads was a no-op without --extendReads; true + extend true =
+                             #   read-length windows at fragment midpoints (neither legacy nor fragment coverage)
+bigwig_args: ''
+
+macs3_qvalue: 0.05        # legacy MACS_Q_VALUE
+macs3_min_length: 250     # legacy MACS_MIN_LENGTH
+macs3_max_gap: 500        # legacy MACS_MAX_GAP
+macs3_fe_cutoff: 2.0      # legacy config.py 2.0 (fe2.0 narrowPeak files); legacy merge_peaks.sh used the fe4.0 files, which also exist in peaks/ (4.0 = alternative)
+macs3_call_summits: false
+macs3_broad: false
+macs3_broad_cutoff: 0.1
+macs3_args: ''
+
+# ---- Downstream analyses (AV_ATACSEQ_2026 values; README section "Downstream analyses") -------------------------
+# comparisons.csv: the five per-line comparisons (BT54, 6349, TS603, HGGx42c, K27MKO: high vs low) and gd2_high_vs_low
+# (every high line vs every low line, block = tmm_group (cell line), pooled). motif_targets.csv: ST8SIA1 gene and cCRE.
+# The ST8SIA1 cCRE BED (st8sia1_ccres_hs1.bed) is a project pre-step: its liftOver to hs1 is not done by the pipeline.
+run_differential: true
+run_annotation: true
+run_motifs: true
+comparisons: comparisons.csv
+peak_files: null
+diff_tables: null
+motif_targets: motif_targets.csv
+species: 'Homo sapiens'
+genome_build: 'hs1'
+bsgenome: null
+org_db: null
+diff_regions: 'peaks,promoters'
+diff_minq: 10
+diff_pe: 'both'
+diff_max_frag: 500
+diff_dedup: null
+diff_bin_size: 10000
+diff_lfc: 0.585
+diff_fdr: 0.1
+diff_table: 'best'
+diff_qlf_min_libs: 3
+diff_fixed_dispersion: 0.05          # the gd2 comparison sets 0.15 in comparisons.csv (legacy gd2 chunk)
+diff_promoter_up: 2000
+diff_promoter_down: 200
+diff_promoter_min_fc: 4
+diff_cpus: 4
+annotation_tss_region: '-2000,200'
+annotation_fdr: null
+motif_regions: 'promoters'
+motif_lfc: 0.585
+motif_min_score: 10
+motif_test: 'binomial'
+motif_max_kmer: 3
+motif_background: 'otherBins'
+motif_seed: 123
+motif_top: 40
+motif_padj_primary: 2.0
+motif_padj_relaxed: 1.0
+motif_min_bin_peaks: 10
+motif_target_min_peaks: 15
+motif_pwm_rds: null
+motif_gene_column: 'geneId'
+motif_match: 'substring'
+motif_cpus: 1
+motif_common_padj: 0.10
+motif_common_min_lines: 2
+motif_common_label_strip: '_high_vs_low.*'
+plot_font: 'Helvetica'
+plot_format: 'svg'
+# TOGGLE diff_pe: 'none'                 # older AV (csaw_parameters.R pe = "none"): paired data counted as single-end
+# TOGGLE diff_lfc: 1                     # older AV / AM csaw lfc = 1
+# TOGGLE diff_table: 'combined'          # AM legacy (merged$combined)
+# TOGGLE annotation_fdr: 0.1             # older AV: annotate FDR < 0.1 only (all regions when none pass)
+# TOGGLE motif_lfc: 1                    # older AV / AM motif_analysis lfc_thres = 1
+# TOGGLE motif_regions: 'promoter_sites,non-promoter_sites,all_sites'   # older AV / AM: the annotation subsets instead of the promoter table
+# TOGGLE diff_regions: 'peaks'           # no promoter table (the promoter chunk is then not run and motif_regions must not use promoters)

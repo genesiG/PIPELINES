@@ -1,0 +1,4 @@
+sample_id,fastq_1,fastq_2,condition,replicate,tmm_group,tmm_group_legacy,peak_group,exclude
+sample_A1,/path/to/sample_A1_R1.fastq.gz,/path/to/sample_A1_R2.fastq.gz,condition_1,1,group_A,group_A,peak_1,false
+sample_A2,/path/to/sample_A2_R1.fastq.gz,/path/to/sample_A2_R2.fastq.gz,condition_1,2,group_A,group_A,peak_1,false
+sample_B1,/path/to/sample_B1_R1.fastq.gz,/path/to/sample_B1_R2.fastq.gz,condition_2,1,,,peak_2,false

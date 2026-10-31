@@ -1,0 +1,88 @@
+# CLAUDE.md
+
+Read `AGENTS.md` in this directory before doing anything: it is the runbook
+for setting up and running a labmate's CRISPR screen analysis on a Mac with
+Docker, and it says that this pipeline folder is not edited during an analysis.
+
+- **First time on this computer** (Docker not set up, or never checked): follow
+  `SETUP.md` in this folder, once.
+- **Running an analysis** (almost always): the runbook, `AGENTS.md`. Don't edit
+  anything in this folder for that.
+- **Changing the pipeline**: not during an analysis. If the pipeline itself seems to
+  need a change, ask the maintainers.
+
+## Ask about the experiment; never assume it
+
+Never assume the biology or how the experiment was done or processed (screen
+type, what each sample is, replicates, timepoints, controls, expected hits, how
+the sequencing library was made). Ask the user, in short batches, before
+preparing inputs, choosing contrasts, interpreting results or writing Methods;
+record the answers in the project's `CONTEXT.md`. When the data seem to
+contradict what the user said, show them the numbers and ask; never
+reinterpret the design yourself. Details: "Ask about the experiment; never
+assume it" in `AGENTS.md` of the project folder (copied by `init`).
+
+## Delegate to subagents (default, not the exception)
+
+The agent definitions are in `.claude/agents/` of this folder. The lead (you)
+uses the most expensive model: it spends its tokens on the user, decisions,
+`run_crisprscreen.sh` and commits. Every task in the table goes to its agent.
+(`agent/CLAUDE.md` in this folder is the template that `init` copies into each
+project; it is not used here.)
+
+| Task | Agent | Model |
+|---|---|---|
+| Setting up a computer: reading the hardware, Docker, files | `scout` (several in parallel) | haiku |
+| Docker errors (outside facts, the Docker Desktop message) | `web-researcher` | haiku |
+| Failed `setup` or image build | `log-inspector` | haiku |
+| Messy input files (Excel/CSV, core sheets, vendor libraries) | `input-preparer` | sonnet |
+| Reading: a question needing >2 files, or a file over ~300 lines | `scout` (several in parallel) | haiku |
+| After every run, success or failure | `log-inspector`, then `results-reporter` on success | haiku |
+| Comparing with earlier or collaborator numbers | `output-verifier` | haiku |
+| Statistics questions and contrast design | `statistician` | sonnet |
+| Plots (replace the right script in the project's `utils/`, re-run, review the PNGs) | `figure-maker` | sonnet |
+| Methods text | `methods-writer` | sonnet |
+| Edits to this pipeline (only when the maintainers ask) | `code-supervisor` (spawns `implementer`) | sonnet |
+| Outside facts (tool flags, library formats) | `web-researcher` | haiku |
+| Papers and citations | `literature-scout` | sonnet |
+| How MAGeCK or the pipeline code works | `code-researcher` | sonnet |
+
+Mandatory triggers (do the delegation, don't skip it):
+- setting up a computer, or any Docker failure;
+- preparing sample, library or contrast files from messy sources;
+- after every run, success or failure;
+- before reporting statistics or comparing with earlier numbers;
+- any change to the pipeline (only when the maintainers ask).
+
+## After `init`: switch to the project's instructions
+
+Users usually ask you to set up the project before running it, so the project's
+`.claude/agents`, `CLAUDE.md` and `AGENTS.md` are created mid-session. Immediately after
+`init`, read the new project's `CLAUDE.md` and `AGENTS.md` and follow them from then on
+(delegation table and triggers included). If Claude Code was started in the pipeline
+folder, its `.claude/agents` is the same kit, so the agents are available now. If they are
+not listed as available subagent types, either spawn a general-purpose agent whose prompt
+is the agent file's body (after the frontmatter) plus the brief, with the model from the
+file's frontmatter, or ask the user to restart Claude Code in the project folder
+(recommended for every later session: start Claude Code inside the project folder).
+
+## Analyses beyond the pipeline
+
+Analyses the pipeline doesn't do are allowed: the script goes in the project's
+`utils/<name>.<R|py|sh>`, writes only to a new `results/<name>/`, and runs with
+`./utils/run_crisprscreen.sh script utils/<name>.R` (pinned image, memory limits, log in
+`metadata/script_logs/`). Workflow and rules: "Analyses beyond the pipeline" in the
+project's `AGENTS.md`. Never run the pipeline's own steps any other way than `run`.
+
+## How to brief
+
+- Each brief stands alone: absolute paths, the project folder, that the pipeline folder is
+  read-only, the files the agent owns, the expected return, and the experimental context the
+  user confirmed (or the path to `CONTEXT.md`).
+- Spot-check numbers from Haiku agents by opening the cited path. Run independent agents in one message.
+- If an agent fails twice, escalate (another model or agent) or ask the user.
+
+## The lead keeps
+
+Talking to the user, decisions, running run_crisprscreen, anything destructive (only with
+the user's OK), and git commits.

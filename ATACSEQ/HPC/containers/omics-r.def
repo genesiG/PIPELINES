@@ -1,0 +1,87 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.10
+
+%setup
+    # Required on PMACS: the build command binds /usr/lib64/ossl-modules (FIPS), the bind target must exist
+    mkdir -p ${APPTAINER_ROOTFS}/usr/lib64/ossl-modules
+
+%files
+    omics-r.env.lock.txt /opt/omics-r/omics-r.env.lock.txt
+    omics-r.env.yml /opt/omics-r/omics-r.env.yml
+    check_bioc_installed.R /opt/omics-r/check_bioc_installed.R
+    omics-slim-env /opt/omics-r/omics-slim-env
+    fonts-helvetica.conf /opt/omics-r/fonts-helvetica.conf
+
+%labels
+    Description omics R environment (env r of the lab omics Docker image): R 4.4.3, Bioconductor 3.20, DESeq2, csaw, edgeR, ChIPseeker, monaLisa, ChIPseqSpikeInFree
+    R_VERSION 4.4.3
+    BIOC_RELEASE 3.20
+    DESEQ2_VERSION 1.46.0
+    CSAW_VERSION 1.40.0
+    EDGER_VERSION 4.4.0
+    CHIPSEEKER_VERSION 1.42.0
+    MONALISA_VERSION 1.12.0
+    SOURCE docker/omics 2026.10.3 r env
+
+%post
+    set -e
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    # Create env r from the explicit lock (same packages as the Docker image), retry up to 3 times.
+    # check_bioc_installed.R fails when a bioconductor-* conda package has no R package (failed data download).
+    ok=0
+    for attempt in 1 2 3; do
+        micromamba create -y -p /opt/envs/r -f /opt/omics-r/omics-r.env.lock.txt && /opt/envs/r/bin/Rscript /opt/omics-r/check_bioc_installed.R /opt/envs/r && { ok=1; break; }
+        echo "micromamba failed for r (attempt ${attempt} of 3)" >&2
+        rm -rf /opt/envs/r
+        sleep 5
+    done
+    [ "${ok}" = 1 ]
+    # r.lock.txt has no procps-ng; Nextflow needs ps, so add it (pinned as in rnaseq-align).
+    micromamba install -y --freeze-installed -p /opt/envs/r -c conda-forge procps-ng=4.0.6
+    micromamba clean -a -y
+    # ChIPseqSpikeInFree 1.2.4 (commit f9cc88f), same steps as Dockerfile section (f2).
+    # Its Depends are all in env r. Do not upgrade: later commits reject the 30 kb / 5 kb bin sizes.
+    mkdir -p /tmp/spikein
+    cd /tmp/spikein
+    if [ -x /opt/envs/r/bin/curl ]; then CURL=/opt/envs/r/bin/curl; else CURL=$(command -v curl); fi
+    "${CURL}" -fsSL -o ChIPseqSpikeInFree.tar.gz https://github.com/stjude/ChIPseqSpikeInFree/archive/f9cc88f618121e1a3bc075de49188f70179ff90a.tar.gz
+    echo "6855c125f8fbb53b1858eaa2ab3bb0ea3612ee4a142ab62f780e7cf2aece2d3f  ChIPseqSpikeInFree.tar.gz" | sha256sum -c -
+    PATH=/opt/envs/r/bin:$PATH R CMD INSTALL --no-docs ChIPseqSpikeInFree.tar.gz
+    /opt/envs/r/bin/Rscript -e 'library(ChIPseqSpikeInFree)'
+    cd /
+    rm -rf /tmp/spikein
+    # Slim the env in the same step as its creation (keeps the compiler toolchain, as Dockerfile env r).
+    sh /opt/omics-r/omics-slim-env --keep-toolchain /opt/envs/r
+    # Helvetica and Arial -> URW Nimbus Sans (metric-compatible), instead of DejaVu Sans for R cairo plots.
+    # Env r has its own fontconfig, so the alias goes into both conf.d directories.
+    apt-get update
+    apt-get install -y --no-install-recommends fontconfig fonts-urw-base35
+    rm -rf /var/lib/apt/lists/*
+    install -m 644 /opt/omics-r/fonts-helvetica.conf /etc/fonts/conf.d/29-helvetica-nimbus.conf
+    install -m 644 /opt/omics-r/fonts-helvetica.conf /opt/envs/r/etc/fonts/conf.d/29-helvetica-nimbus.conf
+    fc-cache -f || true
+    /opt/envs/r/bin/fc-cache -f || true
+
+%environment
+    export PATH=/opt/envs/r/bin:$PATH
+    export LC_ALL=C
+
+%test
+    set -e
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    export PATH=/opt/envs/r/bin:$PATH
+    ps --version
+    fc-match Helvetica | grep -q "Nimbus Sans"
+    /opt/envs/r/bin/fc-match Helvetica | grep -q "Nimbus Sans"
+    Rscript -e 'cat("R", as.character(getRversion()), "\n")'
+    Rscript -e '
+pkgs <- c("DESeq2", "ashr", "apeglm", "vsn", "pheatmap", "ggrepel", "patchwork", "csaw", "edgeR", "limma",
+          "ChIPseeker", "txdbmaker", "monaLisa", "JASPAR2024", "TFBSTools",
+          "BSgenome.Hsapiens.UCSC.hs1", "BSgenome.Mmusculus.UCSC.mm39", "ggVennDiagram",
+          "clusterProfiler", "org.Hs.eg.db", "org.Mm.eg.db", "svglite", "Rsamtools", "rtracklayer",
+          "GenomicFeatures", "ChIPseqSpikeInFree", "ComplexHeatmap", "EnrichedHeatmap")
+for (p in pkgs) {
+    suppressPackageStartupMessages(library(p, character.only = TRUE))
+    cat(p, as.character(packageVersion(p)), "\n")
+}
+'

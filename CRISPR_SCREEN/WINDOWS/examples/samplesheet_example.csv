@@ -1,0 +1,4 @@
+barcode_id,barcode,sample_name
+2F1,GCCATCTT,baseline_rep1
+2F2,GCTGGATT,treatment_low_rep1
+2F3,TAACTCGG,treatment_high_rep1

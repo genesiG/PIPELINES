@@ -1,0 +1,10 @@
+norm_run,method,bin_size,cutoff,max_turns,min_first_turn,ref_condition
+K27me2,chipseqspikeinfree,10000,1.2,0.74,0.7,DMSO
+K27me3,chipseqspikeinfree,30000,1.2,0.972,,DMSO
+K4me3,chipseqspikeinfree,10000,1.2,0.99,,DMSO
+H2AK119ub,chipseqspikeinfree,10000,1.2,0.99,,DMSO
+CBX2,chipseqspikeinfree,10000,0.9,0.76,,DMSO
+EZH2,chipseqspikeinfree,5000,0.7,0.668,,DMSO
+GSTCBX2,chipseqspikeinfree,10000,1.2,0.99,,DMSO
+GSTControl,chipseqspikeinfree,10000,1.2,0.99,,DMSO
+GSTCBX7,chipseqspikeinfree,10000,1.2,0.99,,DMSO

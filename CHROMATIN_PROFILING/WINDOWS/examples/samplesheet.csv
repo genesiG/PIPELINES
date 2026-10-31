@@ -1,0 +1,5 @@
+sample_id,fastq_1,fastq_2,bam,antibody,condition,replicate,control_id,group,norm_run,exclude
+IgG_WT_rep1,/path/to/IgG_WT_rep1_R1.fastq.gz,/path/to/IgG_WT_rep1_R2.fastq.gz,,IgG,WT,1,,WT_IgG,,false
+IgG_WT_rep2,/path/to/IgG_WT_rep2_R1.fastq.gz,/path/to/IgG_WT_rep2_R2.fastq.gz,,IgG,WT,2,,WT_IgG,,false
+K27me3_WT_rep1,/path/to/K27me3_WT_rep1_R1.fastq.gz,/path/to/K27me3_WT_rep1_R2.fastq.gz,,K27me3,WT,1,IgG_WT_rep1,WT_K27me3,K27me3_run,false
+K27me3_WT_rep2,/path/to/K27me3_WT_rep2_R1.fastq.gz,/path/to/K27me3_WT_rep2_R2.fastq.gz,,K27me3,WT,2,IgG_WT_rep2,WT_K27me3,K27me3_run,false

@@ -1,0 +1,3 @@
+name,type,target,comparison,label,min_peaks
+ST8SIA1_gene,gene,ST8SIA1,gd2_high_vs_low,ST8SIA1 peaks,
+ST8SIA1_cCRE,regions,st8sia1_ccres_hs1.bed,gd2_high_vs_low,ST8SIA1 cCRE,
