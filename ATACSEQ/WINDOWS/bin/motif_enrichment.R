@@ -47,9 +47,9 @@
 #   --lfc=0.585                   OPTIONAL, default 0.585. Bins: logFC > lfc (increased) and logFC < -lfc (decreased).
 #   --min-bin-peaks=10            OPTIONAL, default 10. Skip rule: fewer regions than this in either bin.
 # gene mode only:
-#   --target=ST8SIA1              REQUIRED. Gene symbol matched in --gene-column (legacy: grepl, fixed, on geneId).
+#   --target=ST8SIA1              REQUIRED. Gene symbol matched in --gene-column (whole symbol by default; legacy: grepl, fixed, on geneId).
 #   --gene-column=geneId          OPTIONAL, default geneId (annotation column).
-#   --match=substring|exact       OPTIONAL, default substring (legacy). exact: the whole cell equals --target.
+#   --match=exact|substring  OPTIONAL, default exact: the whole gene symbol equals --target (the nearest-gene linking of ChIPseeker/GREAT). substring (legacy grepl, fixed) also matches other genes: FOS -> FOSB/FOSL1/FOSL2, MYC -> MYCN/MYCL/MYCBP2, SOX2 -> SOX2-OT/SOX21.
 #   --target-label=               OPTIONAL, default "<target> peaks" (legacy bin label).
 #   --other-label="Other peaks"   OPTIONAL, default "Other peaks".
 #   --min-peaks=15                OPTIONAL, default 15. Skip rule: fewer regions than this in the target or the other bin.
@@ -119,12 +119,13 @@
 # * The heatmaps show the topX motifs by -log10 padj when <= 2 motifs pass the relaxed threshold or more than topX pass the primary
 #   one, whether or not they are significant; n_sig_padj_* of the summary row give the number that actually passed.
 # * Gene mode: "regions of the gene" are the regions whose ChIPseeker nearest-TSS gene (no distance limit) matches --target. The
-#   default --match=substring also matches longer symbols (FOS: FOSB, FOSL1; JUN: JUNB, JUND; MYC: MYCN), use --match=exact for
-#   such targets. The target regions of one gene are few and not independent (nearby regions share sequence and context).
+#   default --match=exact compares the whole symbol; --match=substring (legacy) also matches longer symbols (FOS: FOSB, FOSL1;
+#   JUN: JUNB, JUND; MYC: MYCN, MYCL, MYCBP2; SOX2: SOX2-OT, SOX21). The target regions of one gene are few and not independent
+#   (nearby regions share sequence and context).
 # * Width: all regions are cut or extended to the mean width, so long peaks lose their flanks and short peaks gain sequence that is
 #   not accessible. The composition control (kmers up to 3) removes GC / di- / tri-nucleotide differences, not other confounders.
 # * motif.name is not unique in JASPAR2024 (84 of the 720 PWMs in the cached legacy set share one of 39 names): motif.id is the
-#   key. motif_common.R still matches on motif.name (legacy) and warns.
+#   key. motif_common.R keys on motif.id too (its label column adds the id to shared names).
 #
 # ---- Where the port deviates from the legacy, and why -----------------------------------------------------------------------
 # * BPPARAM: --cpus = 1 gives exactly the legacy SerialParam(RNGseed). --cpus > 1 uses MulticoreParam(cpus, RNGseed); the
@@ -342,8 +343,8 @@ if (mode == "diff") {
   min_peaks    <- as.integer(as_num(get_opt(args, "min-peaks", "15"), "min-peaks"))
   if (mode == "gene") {
     gene_column  <- get_opt(args, "gene-column", "geneId")
-    match_mode   <- get_opt(args, "match", "substring")
-    if (!(match_mode %in% c("substring", "exact"))) die("--match must be substring or exact", 2L)
+    match_mode   <- get_opt(args, "match", "exact")
+    if (!(match_mode %in% c("exact", "substring"))) die("--match must be exact or substring", 2L)
     target_label <- get_opt(args, "target-label", paste0(target, " peaks"))
   } else {
     target_label <- get_opt(args, "target-label", "Target regions")

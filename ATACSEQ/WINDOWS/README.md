@@ -334,7 +334,7 @@ Relative paths are relative to the project folder.
 | `motif_target_min_peaks` | `15` | Target mode: default minimum regions in the target and in the other set (a CSV `min_peaks` overrides it) |
 | `motif_pwm_rds` | `null` | Cached PWMList (legacy `rds/pwms.rds`); `null` = JASPAR2024 from the package |
 | `motif_gene_column` | `geneId` | Annotation column searched by a gene target |
-| `motif_match` | `substring` | Gene target matching: `substring` (legacy `grepl`) or `exact` |
+| `motif_match` | `exact` | Gene target matching: `exact` (whole gene symbol equals the nearest gene) or `substring` (legacy `grepl`; also matches other genes, e.g. FOS: FOSB, FOSL1, FOSL2) |
 | `motif_cpus` | `1` | `1` = serial run with the legacy seed (the reproducible result); more uses MulticoreParam and is not bit-reproducible |
 | `motif_common_padj` | `0.10` | MOTIF_COMMON: a motif is significant in a comparison at this adjusted P |
 | `motif_common_min_lines` | `2` | MOTIF_COMMON: a motif is common when significant in at least this many comparisons |
@@ -624,8 +624,8 @@ These are the legacy method's limits, ported unchanged. State them when you repo
 - **Promoters:** the promoter windows of neighbouring genes overlap, so promoter rows are not independent.
 - **Motifs:** the bins are cut on logFC without an FDR filter. Each PWM hit counts as an independent trial, so the p-values are
   anti-conservative, and the JASPAR matrices are correlated. Read the ranking and log2enr, not the count of significant motifs.
-  `motif.name` is not unique in JASPAR2024: `motif_common` keys on the name as the legacy did, so a few motifs can be missed (a
-  warning is printed).
+  `motif.name` is not unique in JASPAR2024: `motif_common` keys on the matrix ID (`motif.id`); the table has `motif.name` and a `label` (the name, or name (ID)
+  when several matrices share the name).
 - **Annotation:** a gene is the nearest TSS with no distance limit. An annotation is not evidence that a region regulates that gene.
 - **Decisions:** the comparisons, `block_column`, `pooled`, `fixed_dispersion`, the thresholds (`diff_lfc`, `motif_lfc`, `diff_fdr`)
   and the motif targets are scientific decisions. Confirm them with the user, and with the statistician, before a run.

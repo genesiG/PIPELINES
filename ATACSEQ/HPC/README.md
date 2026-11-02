@@ -238,7 +238,7 @@ Every key has a default in `nextflow.config`. A project lists only the keys it c
 | `motif_target_min_peaks` | `15` | Target mode: default minimum regions in the target and in the other set (a CSV `min_peaks` overrides it) |
 | `motif_pwm_rds` | `null` | Cached PWMList (legacy `rds/pwms.rds`); `null` = JASPAR2024 from the package |
 | `motif_gene_column` | `geneId` | Annotation column searched by a gene target |
-| `motif_match` | `substring` | Gene target matching: `substring` (legacy `grepl`) or `exact` |
+| `motif_match` | `exact` | Gene target matching: `exact` (whole gene symbol equals the nearest gene) or `substring` (legacy `grepl`; also matches other genes, e.g. FOS: FOSB, FOSL1, FOSL2) |
 | `motif_cpus` | `1` | `1` = serial run with the legacy seed (the reproducible result); more uses MulticoreParam and is not bit-reproducible |
 | `motif_common_padj` | `0.10` | MOTIF_COMMON: a motif is significant in a comparison at this adjusted P |
 | `motif_common_min_lines` | `2` | MOTIF_COMMON: a motif is common when significant in at least this many comparisons |

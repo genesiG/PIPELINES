@@ -36,7 +36,7 @@ process MOTIF_ENRICHMENT {
     val padj_relaxed                // motif_padj_relaxed
     val lfc                         // motif_lfc (diff mode)
     val gene_column                 // motif_gene_column (gene mode)
-    val match                       // motif_match: substring | exact (gene mode)
+    val match                       // motif_match: exact | substring (gene mode)
     val plot_font                   // plot_font: Helvetica (font family of every plot)
     val plot_format                 // plot_format: svg | pdf
     path step_script                // bin/motif_enrichment.R, or the project's `motif_enrichment:` replacement

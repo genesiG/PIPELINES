@@ -46,7 +46,7 @@ process MOTIF_COMMON {
 
     stub:
     """
-    printf 'motif.name,n_cell_lines_significant\\nARNT,2\\n' > common_significant_motifs.csv
+    printf 'motif.id,motif.name,label,n_cell_lines_significant\\nMA0004.1,ARNT,ARNT,2\\n' > common_significant_motifs.csv
     printf '<svg xmlns="http://www.w3.org/2000/svg" width="576pt" height="504pt"><text font-family="Helvetica">venn</text></svg>\\n' > venn_common_motifs.svg
     printf 'comparison,region,total_peaks\\n' > motif_analysis_summary.csv
     """

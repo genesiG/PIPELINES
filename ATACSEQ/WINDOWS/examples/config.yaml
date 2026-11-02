@@ -138,7 +138,7 @@ macs3_args: ''
 # motif_target_min_peaks: 15       # target mode: default minimum regions (a CSV min_peaks overrides)
 # motif_pwm_rds: null              # cached PWMList (legacy rds/pwms.rds); null = JASPAR2024 from the package
 # motif_gene_column: 'geneId'      # annotation column searched by a gene target
-# motif_match: 'substring'         # substring (legacy grepl) | exact
+# motif_match: 'exact'   # exact (whole symbol = nearest gene) | substring (legacy grepl; FOS also matches FOSB)
 # motif_cpus: 1                    # 1 = serial RNGseed run (legacy result); >1 not bit-reproducible
 # motif_common_padj: 0.10          # MOTIF_COMMON: significant in a comparison at this adjusted P
 # motif_common_min_lines: 2        # MOTIF_COMMON: common when significant in at least this many comparisons

@@ -246,7 +246,7 @@ the tested region set, not the differentially accessible regions; use the FDR an
   `motif_padj_relaxed` (1, adjusted P < 0.1) when two or fewer pass the primary threshold. Heatmaps show the top `motif_top` (40).
   The analysis is skipped (only `NAME.skipped.txt`) when a bin has fewer than `motif_min_bin_peaks` (10) regions.
 - **Gene target (`type: gene` in `motif_targets.csv`).** The regions of the `all_sites` table of the universe comparison whose
-  nearest gene matches the target symbol (`motif_gene_column` = `geneId`; `substring` as in the legacy `grepl`, or `exact`) against
+  nearest gene matches the target symbol (`motif_gene_column` = `geneId`; `exact` (default, the whole symbol equals the nearest gene) or `substring` (legacy `grepl`)) against
   all other regions. Each bin needs at least `min_peaks` (default `motif_target_min_peaks`, 15).
 - **Regions target (`type: regions`).** The regions of that table that overlap a BED of target regions (in the pipeline genome's
   coordinates; a liftover is a project pre-step) against the other regions. Same minimum.
@@ -258,7 +258,7 @@ parameter with `motif_seed` (123), which is repeatable. A value above 1 uses sev
 of logFC are partly noise. The reference is the other bin, so every statement is relative. monaLisa's binomial test is one-sided,
 and the two columns of a two-bin analysis mirror each other. Each PWM hit counts as one independent trial, the hits are clustered,
 and the JASPAR matrices are correlated: the p-values are anti-conservative and the number of significant motifs counts redundant
-matrices. Read the ranking and log2enr, not the count. In the gene mode, `substring` also matches longer symbols (FOS: FOSB, FOSL1).
+matrices. Read the ranking and log2enr, not the count. In the gene mode, `substring` also matches other genes (FOS: FOSB, FOSL1, FOSL2; MYC: MYCN, MYCL, MYCBP2; SOX2: SOX2-OT, SOX21).
 
 **Checked so far.** The motif tables were identical to the legacy for the five lines (largest relative difference 1.5e-14). The
 gene and regions targets were identical to the legacy chunks on a 5,022-row subsample; the full-table runs ran out of memory at
@@ -275,8 +275,7 @@ comparison names with `motif_common_label_strip` removed (AV example: `_high_vs_
 a Venn diagram (written only when a motif is significant in all inputs), and the stacked summaries.
 
 **Limits.** The count of comparisons is a set-overlap descriptor, not a test of common enrichment, and it inherits the limits of the
-motif analysis above. The key is `motif.name`, which is not unique in JASPAR2024: for a duplicated name only the first matrix enters
-the table (a warning is printed), so a few motifs can be missed. On the five legacy lines the legacy Venn diagram cannot be
+motif analysis above. The key is `motif.id` (the JASPAR matrix ID); the output has `motif.name` and a `label` (the name, or name (ID) when several matrices share the name). On the five legacy lines the legacy Venn diagram cannot be
 reproduced, because no motif is significant in all five. Comparisons that rest on one library per side should not be mixed with
 replicated ones without saying so.
 

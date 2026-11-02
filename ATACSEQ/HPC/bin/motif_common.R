@@ -2,8 +2,9 @@
 # motif_common.R -- motifs that are significantly enriched in several comparisons (one motif table per comparison, one region
 # set). Port of the legacy find_common_motifs.Rmd (Scripts/, AV_ATACSEQ_2026, March 2026): chunks "load cell lines",
 # "merge data frames and summarize motifs", "Find common motifs" and "venn diagram of significant motifs". The computation
-# (the reshape() tables, the significance flag, the >= min-lines count, the Venn sets) is the legacy code, verbatim; only the
-# input discovery (a file list instead of list.files on motif/) and the output paths are replaced by the CLI.
+# (the reshape() tables, the significance flag, the >= min-lines count, the Venn sets) is the legacy code, verbatim, except that the
+# key is motif.id (deviation, see the header below); only the input discovery (a file list instead of list.files on motif/) and
+# the output paths are replaced by the CLI.
 #
 # CLI contract (called by the MOTIF_COMMON module; --key=value):
 #   --inputs=a_motif_analysis.csv,b_motif_analysis.csv   REQUIRED. Diff-mode motif tables of ONE region set (MOTIF_ENRICHMENT,
@@ -27,9 +28,10 @@
 #
 # Outputs (in --out-prefix):
 #   common_significant_motifs.csv  write.csv(row.names = FALSE). One row per motif significant in >= min-lines comparisons,
-#                                  sorted by the count (descending). Columns: motif.name, one TRUE/FALSE column per label
-#                                  (significant), n_cell_lines_significant (legacy name), motif.id-free wide columns
-#                                  log2enr_up.<label> and padj_up.<label> per label, avg_log2enr, max_log2enr, max_padj.
+#                                  sorted by the count (descending). Columns: motif.id, motif.name, label (the motif.name, or
+#                                  "motif.name (motif.id)" when several matrices share the name), one TRUE/FALSE column per label
+#                                  (significant), n_cell_lines_significant (legacy name), wide columns log2enr_up.<label> and
+#                                  padj_up.<label> per label, avg_log2enr, max_log2enr, max_padj.
 #   venn_common_motifs.svg         Venn diagram of the significant motifs per label (--plot-format=pdf: venn_common_motifs.pdf).
 #                                  Written ONLY when at least one motif is significant in all inputs (legacy); otherwise not written.
 #   motif_analysis_summary.csv     rbind of the --summaries files (only when --summaries is given)
@@ -40,7 +42,7 @@
 # Question, model, assumptions: in how many comparisons is a motif significantly enriched in the increased-accessibility bin?
 # A motif is called significant in a comparison when its adjusted P value (negLog10, from motif_enrichment.R: binomial test
 # with composition control) passes --padj. The comparisons are then counted; no new test is run, so the count is a set-overlap
-# statistic, not a test of common enrichment. The motifs are matched by motif.name (legacy).
+# statistic, not a test of common enrichment. The motifs are matched by motif.id (the JASPAR matrix ID).
 #
 # Not ported: the legacy printouts of top-10 tables and the Venn print() to the console device (no file effect).
 #
@@ -52,12 +54,8 @@
 # * The count of comparisons in which a motif is significant is a set-overlap descriptor, not a test of common enrichment, and
 #   the thresholds (padj <= --padj) are applied to p-values that are anti-conservative. Comparisons that rest on one library per
 #   side (fixed-dispersion LRT) should not be mixed with replicated ones without saying so.
-# * motif.name is NOT unique in JASPAR2024 (84 of the 720 PWMs of the cached legacy set share one of 39 names, e.g. CTCF, FOS,
-#   ASCL1). reshape() and merge() key on motif.name, so for a duplicated name only the FIRST matrix of each table enters the wide
-#   tables and the count; a motif significant only through another matrix of that name is missed. On the five legacy lines the
-#   script gives 40 motifs significant in >= 2 lines; a separate recount (not through this script) gives 41 with the first
-#   matrix of each name, 44 when any matrix of the name counts and 42 when keyed by motif.id, so the effect is a few motifs.
-#   Kept as the legacy (the table stays identical to it); a warning is printed. motif.id is the correct key.
+# * motif.name is not unique in JASPAR2024 (84 of 720 PWMs share one of 39 names, e.g. CTCF, FOS, ASCL1), so the script keys
+#   on motif.id; the label column adds the id to names shared by several matrices.
 #
 options(stringsAsFactors = FALSE)
 
@@ -172,11 +170,6 @@ motif_list <- setNames(
     if (!all(needed %in% colnames(df))) die(paste0("missing columns in ", results[i], ": ",
                                                    paste(setdiff(needed, colnames(df)), collapse = ", ")), 3L)
 
-    if (anyDuplicated(df$motif.name)) {
-      cat("WARNING: ", results[i], ": ", sum(duplicated(df$motif.name)), " PWMs repeat a motif.name already used by another PWM; ",
-          "only the first PWM of each name is used below (legacy matching on motif.name, see the header)\n", sep = "", file = stderr())
-    }
-
     # Retain motif identifiers and the significance score for the "up" bin
     df <- df[, c("motif.id", "motif.name",
                  "padj_up", "log2enr_up",
@@ -206,12 +199,20 @@ motif_list_sig <- lapply(motif_list, function(df) {
 # Combine all data frames into one long table — must be done before reshaping
 long_df <- do.call(rbind, motif_list_sig)
 
+# The key is motif.id. id_map gives the motif.name of every id in the inputs; label is the name, with the id added when
+# the name belongs to more than one matrix (motif.name is not unique in JASPAR2024)
+id_map <- unique(do.call(rbind, lapply(motif_list, function(df) df[, c("motif.id", "motif.name")])))
+id_map <- id_map[!duplicated(id_map$motif.id), ]
+shared_names <- id_map$motif.name[duplicated(id_map$motif.name)]
+id_map$label <- ifelse(id_map$motif.name %in% shared_names,
+                       paste0(id_map$motif.name, " (", id_map$motif.id, ")"), id_map$motif.name)
+
 # --- Significance wide table (TRUE/FALSE per cell line) ---
 # Using base R reshape to avoid tidyr version incompatibilities with values_fill
 
 wide_sig <- reshape(
-  data      = long_df[, c("motif.name", "cell_line", "significant")],
-  idvar     = "motif.name",
+  data      = long_df[, c("motif.id", "cell_line", "significant")],
+  idvar     = "motif.id",
   timevar   = "cell_line",
   direction = "wide"
 )
@@ -223,9 +224,9 @@ wide_sig[is.na(wide_sig)] <- FALSE
 
 # --- log2enr wide table (numeric per cell line) ---
 log2_wide <- reshape(
-  data      = long_df[, c("motif.name", "cell_line",
+  data      = long_df[, c("motif.id", "cell_line",
                           "log2enr_up", "padj_up")],
-  idvar     = "motif.name",
+  idvar     = "motif.id",
   timevar   = "cell_line",
   direction = "wide"
 )
@@ -266,8 +267,14 @@ wide_sig$n_cell_lines_significant <- rowSums(wide_sig[, cell_lines], na.rm = TRU
 common_motifs <- wide_sig[wide_sig$n_cell_lines_significant >= min_lines, ]
 common_motifs <- common_motifs[order(-common_motifs$n_cell_lines_significant), ]
 
-common_motifs <- merge(common_motifs, log2_wide, by = "motif.name")
+common_motifs <- merge(common_motifs, log2_wide, by = "motif.id")
 common_motifs <- common_motifs[order(-common_motifs$n_cell_lines_significant), ]
+
+# Add the names (motif.name and label) after the id, then the per-label columns in their order
+common_motifs$motif.name <- id_map$motif.name[match(common_motifs$motif.id, id_map$motif.id)]
+common_motifs$label      <- id_map$label[match(common_motifs$motif.id, id_map$motif.id)]
+common_motifs <- common_motifs[, c("motif.id", "motif.name", "label",
+                                   setdiff(colnames(common_motifs), c("motif.id", "motif.name", "label")))]
 
 # Print a compact preview to the console
 cat("\nMotifs significant in >= ", min_lines, " cell lines: ", nrow(common_motifs), "\n", sep = "")
@@ -284,7 +291,7 @@ cat("\nFull table written to: common_significant_motifs.csv\n")
 
 # Build a named list of significant motif names per cell line (for the Venn input)
 sig_sets <- lapply(motif_list_sig, function(df) {
-  df$motif.name[df$significant]
+  df$motif.id[df$significant]
 })
 
 # Check whether the intersection across all cell lines is non-empty

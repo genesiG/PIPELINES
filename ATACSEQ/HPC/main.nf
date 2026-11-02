@@ -252,7 +252,7 @@ def prepareDownstream(List errs, List rows, List header, Map peakGroups, String 
     if (!(textOf(params.annotation_tss_region) ==~ /-?[0-9]+\s*,\s*-?[0-9]+/)) {
         errs << "annotation_tss_region: '${textOf(params.annotation_tss_region)}' must be two integers, e.g. -2000,200"
     }
-    if (!(textOf(params.motif_match) in ['substring', 'exact'])) errs << "motif_match: '${textOf(params.motif_match)}' must be substring or exact"
+    if (!(textOf(params.motif_match) in ['exact', 'substring'])) errs << "motif_match: '${textOf(params.motif_match)}' must be exact or substring"
     def motifRegions = csvList(params.motif_regions)
     if (!motifRegions) errs << "motif_regions is empty"
     motifRegions.findAll { r -> !(r in motifDirectRegions() || r in motifSetRegions()) }.each { r ->
